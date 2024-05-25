@@ -71,7 +71,7 @@ def per_capita_fitness_from_prey(x,M1,M2,b1,b2,limited_portions, **params):
                          conversion_small*fun_response(x,M1,M2,2,**params)])
     return w_per_capita
     
-def fitness_from_prey(x, M1, M2,b1, b2, r, γ,limited_portions,**params):
+def fitness_from_prey(x, M1, M2, r, γ,**params):
     '''
     portion of inclusive fitness from each prey type, stored in an array, after potentially unequal sharing
     @inputs:

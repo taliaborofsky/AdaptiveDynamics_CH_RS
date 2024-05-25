@@ -5,9 +5,8 @@ from scipy.integrate import odeint, solve_ivp
 from fun_response_funs import *
 from fitness_funs import *
 
-            
-
-def group_formation_model_separate(t, f_of_x_vec,p,M1,M2, params):
+    
+def group_formation_model_alt(t, f_of_x_vec,p,M1,M2, pop_process, params):
     '''
     the full system of balance equations for x = 1,2,3,...,x_max
     @inputs:
@@ -16,6 +15,7 @@ def group_formation_model_separate(t, f_of_x_vec,p,M1,M2, params):
     p - population size of predators
     M1 - population size of big prey
     M2 - population size of small prey
+    pop_process = True or False, whether or not to include death rate and birth rate
     params - is a dictionary of the parameters that must contain: 
             b1, b2,r, γ, a1, a2, h1, h2, α1_of_15, α2_of_1, s1, s2, limited_portions, 
             τx, δ, d
@@ -24,41 +24,127 @@ def group_formation_model_separate(t, f_of_x_vec,p,M1,M2, params):
     df_dt for x = 1, 2, ..., xmax
     '''
     x_max = params['x_max']; τx = params['τx']; δ = params['δ']; d = params['d']
-    f_of_x_vec = np.append(f_of_x_vec,0) # so can find dfdt at x = x_max
-    def f(x):
-        return f_of_x_vec[x-1]
-    def S(x,y):
-        return best_response_fun_given_fitness(x,y,fitnessvec,d)
-    def ψ(x):
-        f_of_1 = f_of_x_vec[0]
-        if x== 1 and f_of_1 >=1:
-            return (f_of_1 - 1) * S(2,1)
-        elif x <= x_max - 1:
-            return f_of_1*S(x+1,1)
-        else:
-            return 0
-    def ϕ(x):
-        return x*S(1,x) if x <= x_max else 0
     
-    x_max = params['x_max']; τx = params['τx']; δ = params['δ']; d = params['d']
     xvec = np.arange(1,x_max+1,1)
+
     # it \tau_x > 0make population matrix = birth matrix + death matrix
     fitnessvec = fun_fitness(xvec, M1, M2, **params)
-    dfdt_vec = np.zeros(x_max)
-    
-    for x in xvec:
-        if x == 1:
-            dfdt = (2*f(2)*ϕ(2) + np.sum([f(y) * ϕ(y) for y in range(3,x_max+1)]) \
-                    - sum([f(y-1)*ψ(y-1) for y in range(2,x_max+1)]))/τx
-        elif x == 2:
-            dfdt = (-f(2)*ϕ(2) - f(2)*ψ(2) + 0.5*f(1)*ψ(1) + f(3)*ϕ(3))/τx
-        else:
-            dfdt = (-f(x)*ϕ(x) - f(x) * ψ(x) + f(x-1)*ψ(x-1) + f(x+1)*ϕ(x+1))/τx
-        
-        dfdt_vec[x-1] = dfdt
-    return dfdt_vec
-    
+    if pop_process==True:
+        Π = make_population_proc_matrix(xvec, fitnessvec, δ, τx, x_max)
+    else: 
+        Π = 0
+    Ψ = make_group_form_mat(xvec, f_of_x_vec, fitnessvec, x_max,d)
+    Φ = make_group_leave_mat(xvec, fitnessvec, x_max, d)
+    return np.matmul( Π + Ψ + Φ, np.transpose(f_of_x_vec))/τx
 
+def make_group_leave_mat(xvec, fitnessvec, x_max, d):
+    
+    ϕ_of_x = best_response_fun_given_fitness(1,xvec,fitnessvec,d)*xvec
+    ϕ_of_x[0] = 0 # can't leave a group of 1
+    
+    first_row_and_upper_diag = ϕ_of_x[1:].copy()
+    first_row_and_upper_diag[0] = 2*first_row_and_upper_diag[0] # if group of size 2 --> 1, 
+                                                                # produces 2 solitaries
+    diag_mat = np.diag(- ϕ_of_x) # fewer groups of size x if grps of size x --> x - 1
+    upper_diag_mat = np.diag(first_row_and_upper_diag,k=1) # more grps of size x if grps of size x +1 --> x
+    group_shrink_mat = diag_mat + upper_diag_mat
+    group_shrink_mat[0,1:] = first_row_and_upper_diag # more solitaries when individuals leave groups
+
+    return group_shrink_mat
+def make_group_form_mat(xvec, f_of_x_vec, fitnessvec, x_max,d):
+    '''
+    example:
+    >>params_reg = dict(b1=1,b2=0.1,r=0, γ=0, a1=1, a2=1, h1=0.5, h2=0.5, 
+                                                    α1_of_1=0.05, α2_of_1=0.95, s1=2, s2=2, d = 20,
+                                                    limited_portions = False)
+    >>f_of_x_vec=[1,1,1]
+    >> make_group_form_mat(x_vec=np.array([1,2,3]), f_of_x_vec, M1=10, M2=10, x_max=3,**params_reg)
+    array([[ 0.        ,  0.        ,  0.        ],
+       [ 0.        , -0.99999985,  0.        ],
+       [ 0.        ,  0.99999985,  0.        ]])
+    '''
+    # alterations
+    f_of_1_vec = np.full(x_max,f_of_x_vec[0])
+    f_of_1_vec[0] = f_of_1_vec[0] - 1
+    xvec = xvec[:-1] # get rid of xmax
+    
+    join_grp_vec = np.zeros(x_max)
+    
+    best_response_vec = best_response_fun_given_fitness(xvec+1,1,fitnessvec,d) #S(x+1,1)
+    join_grp_vec[:-1] = best_response_vec * f_of_1_vec[:-1]
+
+    # make matrix
+    diag_mat = np.diag(- join_grp_vec) # loss from class x as x --> x+1
+    lower_diag_mat = np.diag(join_grp_vec[:-1],k=-1) # gain to class x+1 as x --> x+1
+    group_form_mat = diag_mat + lower_diag_mat
+    group_form_mat[-1, -1] = 0 # can't grow once at x_max
+    group_form_mat[1,0] = 0.5*group_form_mat[1,0] # individuals forming pairs, have to multiply by 1/2
+    return group_form_mat
+                         
+def make_population_proc_matrix(xvec, fitnessvec, δ, τx, x_max):
+    '''
+    make the population processes matrix Π = τx Π_W  + Π_D
+    @inputs
+    xvec = [1,2,..., x_max]
+    fitnessvec = [\bar{w}(1), \bar{w}(2), ..., \bar{x_max}(1)] vector of per capita fitnesses
+    δ = death rate
+    τx = group time scale
+    x_max = max grp size
+
+    @returns
+    np.ndarray that is x_max x x_max
+
+    @example:
+    >> params_reg = dict(b1=1,b2=0.1,r=0,γ=0, a1 = 1, a2 = 1, h1 = 0.5, h2 = 0.5, 
+                  α1_of_1 = 0.05, α2_of_1 = 0.95, s1 = 2, s2 = 2, d = 100, limited_portions = False)
+    >> xvec = np.array([1,2,3]); M1 = 10; M2 = 10; x_max = 3
+    >> fitnessvec = fun_fitness(xvec, M1, M2, **params_reg) # this is array([0.24166667, 0.45833333, 0.53055556])
+    >> make_population_proc_matrix(xvec, fitnessvec, δ, τx, x_max)
+    array([[ 0.00141667,  0.01116467,  0.01591966],
+       [ 0.        , -0.001999  ,  0.002994  ],
+       [ 0.        ,  0.        , -0.002997  ]])
+    '''
+    Π_D = make_death_trans_matrix(xvec, δ, τx, x_max)
+
+    # birth matrix
+    Π_W = np.zeros((x_max,x_max))
+    Π_W[0,:] = fitnessvec*xvec
+
+    # population matrix
+    Π = τx * Π_W + Π_D
+    return Π
+    
+def make_death_trans_matrix(xvec, δ, τx, x_max):
+    '''
+    makes the death transition matrix
+    the diagonal row is D(x)
+    above the diagonal, entries are D(i,j), for i the row and j the column
+
+    @inputs:
+    xvec - vector 1, 2, ..., x_max
+    δ = death rate
+    τx = timescale of group dynamics
+    x_max = max group size
+
+    @output: an x-max x x_max numpy array
+
+    @example 
+    >> make_death_trans_matrix(xvec = np.array([1,2,3]), δ=0.1, τx=0.01, x_max=3)
+    array([[-1.000000e-03,  1.998000e-03,  2.997000e-06],
+       [ 0.000000e+00, -1.999000e-03,  2.994003e-03],
+       [ 0.000000e+00,  0.000000e+00, -2.997001e-03]])
+    '''
+    # number of groups of size x decreases from deaths in group of size x
+    Pi_D = np.zeros((x_max,x_max))
+    D_of_x = fun_1_death(xvec, τx, δ)
+    np.fill_diagonal(Pi_D, -D_of_x)
+
+    # number of groups of size x increases if a larger group of size y has y-x deaths
+    y_mat = np.full((x_max,x_max),xvec)
+    x_mat = y_mat.copy().transpose()
+    D_transition = fun_death_y_to_x(x=x_mat, y=y_mat, τx=τx, δ=δ, x_max=x_max)
+    Pi_D = Pi_D + D_transition
+    return Pi_D
 def fun_1_death(x, τx, δ):
     '''
     The probability of AT LEAST one death in a group of size x over time τ_x
