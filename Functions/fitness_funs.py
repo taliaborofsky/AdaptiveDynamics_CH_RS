@@ -198,3 +198,7 @@ def fun_fitness_from_small_prey(x, M1, M2, **params):
     0.15833333333333333
     '''
     return fitness_from_prey(x, M1, M2, **params)[1]
+
+
+######## non-dimensionalized ###############
+# TO-DO: what do I do if 
