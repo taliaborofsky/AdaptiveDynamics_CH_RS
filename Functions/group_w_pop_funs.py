@@ -31,7 +31,9 @@ def group_formation_model_non_dim(T, F_of_x_vec,P,N1,N2, params):
     def ψ(x):
         F_of_1 = F_of_x_vec[0]
         if x== 1 and F_of_1 >=1:
-            return ( ξ * F_of_1 - 1) * S(2,1)
+            return ξ *F_of_1 * S(2,1)#( ξ *F_of_1 - 1) * S(2,1)
+        elif x == 1 and F_of_1 < 1:
+            return ξ * F_of_1 * S(2,1)
         elif x <= x_max - 1:
             return ξ * F_of_1*S(x+1,1)
         else:
@@ -212,7 +214,7 @@ def full_model(T, initialstate, arg, params):
     
 
     return [dPdT, dN1dT, dN2dT, *dFdT_vec]
-def fun_dydT_non_dim(N1, N2, y Tx, **params):
+def fun_dydT_non_dim(N1, N2, y, Tx, **params):
     W_of_x = fitness_from_prey_non_dim(1+y, N1, N2, **params)
     W_of_1 = fitness_from_prey_non_dim(1, N1, N2, **params)
 
