@@ -3,7 +3,7 @@ import scipy as sp
 from fitness_funs_non_dim import *
 
 
-def group_formation_model_non_dim(T, F_of_x_vec,P,N1,N2, params):
+def group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params):
     '''
     the full system of balance equations for x = 1,2,3,...,x_max, non-dimensionalized
     @inputs:
@@ -23,7 +23,8 @@ def group_formation_model_non_dim(T, F_of_x_vec,P,N1,N2, params):
     η1 = params['η1']; η2 = params['η2']; tildeδ = 1 - η1 - η2
     d = params['d']; ξ = params['ξ']
     F_of_x_vec = np.append(F_of_x_vec,0) # so can find dfdt at x = x_max
-    
+    include_pop_process = 1 if params['pop_process'] == True else 0
+
     def F(x):
         return F_of_x_vec[x-1]
     def S(x,y):
@@ -47,23 +48,27 @@ def group_formation_model_non_dim(T, F_of_x_vec,P,N1,N2, params):
     # it \tau_x > 0make population matrix = birth matrix + death matrix
     fitnessvec = fitness_from_prey_non_dim(xvec, N1, N2, **params)
     dFdT_vec = np.zeros(x_max)
-    include_pop_process = 1 if params['pop_process'] == True else 0
+
+    # births
+    π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params)
+    births_vec = Tx*F_of_x_vec[:-1]* π_vec
+    births_vec = np.append(births_vec,0) # so can calculate births at x_max
+
+    # balance equations
     for x in xvec:
         if x == 1:
             Q_1 = 2*F(2)*ϕ(2) + np.sum([F(y) * ϕ(y) for y in range(3,x_max+1)]) \
                     - sum([F(y-1)*ψ(y-1) for y in range(2,x_max+1)])
-            tilde_w_vec = per_capita_fitness_from_prey_non_dim(xvec, N1, N2, **params)
-            births = Tx * np.sum(F_of_x_vec[:-1] * xvec * tilde_w_vec)
-            dFdT = (Q_1 \
-                    + include_pop_process*(births + fun_deaths(1)))/Tx
+            births1 = births_vec[x_max-1] - births_vec[0]
+            dFdT = (Q_1 + include_pop_process*(births1 + fun_deaths(1)))/Tx
         elif x == 2:
             Q_2 = -F(2)*ϕ(2) - F(2)*ψ(2) + 0.5*F(1)*ψ(1) + F(3)*ϕ(3)
-            dFdT = (Q_2 \
-                    + include_pop_process*fun_deaths(2))/Tx
+            births2 = births_vec[0] - births_vec[1]
+            dFdT = (Q_2 + include_pop_process*(births2+fun_deaths(2)))/Tx
         else:
             Q_x = -F(x)*ϕ(x) - F(x) * ψ(x) + F(x-1)*ψ(x-1) + F(x+1)*ϕ(x+1)
-            dFdT = (Q_x \
-                    + include_pop_process*fun_deaths(x))/Tx
+            birthsx = births_vec[x-2] - births_vec[x-1]
+            dFdT = (Q_x + include_pop_process*(birthsx+fun_deaths(x)))/Tx
         
         dFdT_vec[x-1] = dFdT
     return dFdT_vec
@@ -102,8 +107,11 @@ def best_response_fun_given_fitness(x,y,fitnessvec, d):
     W_of_y = fitnessvec[y-1]
     W_min = min(W_of_x, W_of_y)
     W_max = max(W_of_x, W_of_y)
-    numerator = (W_of_x/W_max)**d
-    denominator = 1 + (W_min/W_max)**d # this adjustment helps avoid dividing by zero from numpy rounding
+    if W_max > 0:
+        numerator = (W_of_x/W_max)**d
+    else:
+        return 0
+    denominator = 1 + numerator # this adjustment helps avoid dividing by zero from numpy rounding
     return numerator/denominator
     
     # if W_of_x**d + W_of_y**d < 1e-100: # note that then at this point it will be 
@@ -134,20 +142,30 @@ def best_response_fun(x,y, N1,N2, d, **params):
     float between 0 and 1
     
     '''
+    
     W_of_x = fitness_from_prey_non_dim(x, N1, N2, **params)
     W_of_y = fitness_from_prey_non_dim(y, N1, N2, **params)
+
+    W_min = min(W_of_x, W_of_y)
+    W_max = max(W_of_x, W_of_y)
+    if W_max > 0:
+        numerator = (W_of_x/W_max)**d
+    else:
+        return 0
+    denominator = 1 + numerator
+
     return W_of_x**d/(W_of_x**d + W_of_y**d)
 
     
-def check_at_equilibrium(final_distribution, P, N1, N2,pop_process,**params):
+def check_at_equilibrium(final_distribution, P, N1, N2,**params):
     '''
     check dF(x)/dT \approx 0
     @ returns: array dFdT_, and 1 if at equilibrium or 0 if not
     '''
     T = 1 # this doesn't matter
-    dFdT_ = group_formation_model_non_dim(T, final_distribution,P,N1,N2, params)
-    at_equilibrium = np.abs(dFdT_) > 1e-10
-    if sum(at_equilibrium) > 0: # at least one df(x)/dt is not zero
+    dFdT_ = group_formation_model_non_dim(T, final_distribution,N1,N2, params)
+    not_at_equilibrium = np.abs(dFdT_) > 1e-8
+    if sum(not_at_equilibrium) > 0: # at least one df(x)/dt is not zero
         return dFdT_, 0
     else:
         return dFdT_, 1
@@ -160,8 +178,8 @@ def model_one_x(T, initialstate, x, params):
     F_of_x = P/x
     F_of_x_vec[x-1] = F_of_x
     dPdT = fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN1dT = fun_dN1dT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN2dT = fun_dN2dT_non_dim(P, N1, N2, F_of_x_vec, **params)
+    dN1dT = fun_dN1dT_non_dim(N1, N2, F_of_x_vec, **params)
+    dN2dT = fun_dN2dT_non_dim(N1, N2, F_of_x_vec, **params)
     return [dPdT, dN1dT, dN2dT]
 
 
@@ -184,8 +202,8 @@ def model_one_x_evolve(T, initialstate, params):
     F_of_x = P/(1+y)
     F_of_x_vec[y] = F_of_x
     dPdT = fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN1dT = fun_dN1dT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN2dT = fun_dN2dT_non_dim(P, N1, N2, F_of_x_vec, **params)
+    dN1dT = fun_dN1dT_non_dim(N1, N2, F_of_x_vec, **params)
+    dN2dT = fun_dN2dT_non_dim(N1, N2, F_of_x_vec, **params)
     dydT = fun_dydT_non_dim(N1, N2, y, **params)
     return [dPdT, dN1dT, dN2dT, dydT]
 
@@ -201,11 +219,11 @@ def full_model(T, initialstate, arg, params):
     P,N1,N2 = initialstate[0:3]
     F_of_x_vec = initialstate[3:]
     dPdT = fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN1dT = fun_dN1dT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN2dT = fun_dN2dT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dFdT_vec = group_formation_model_non_dim(T, F_of_x_vec,P,N1,N2, params)
+    dN1dT = fun_dN1dT_non_dim(N1, N2, F_of_x_vec, **params)
+    dN2dT = fun_dN2dT_non_dim(N1, N2, F_of_x_vec, **params)
+    dFdT_vec = group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params)
     # if if_groups_change:
-    #     dFdT_vec = group_formation_model_non_dim(T, F_of_x_vec,P,N1,N2, 
+    #     dFdT_vec = group_formation_model_non_dim(T, F_of_x_vec,N1,N2, 
     #                                              if_groups_change, params)
     # else:
     #     x = np.argwhere(F_of_x_vec>0)[0][0] + 1
@@ -214,11 +232,54 @@ def full_model(T, initialstate, arg, params):
     
 
     return [dPdT, dN1dT, dN2dT, *dFdT_vec]
-def fun_dydT_non_dim(N1, N2, y, Tx, **params):
-    W_of_x = fitness_from_prey_non_dim(1+y, N1, N2, **params)
-    W_of_1 = fitness_from_prey_non_dim(1, N1, N2, **params)
 
-    return (W_of_x - W_of_1)/Tx
+def nullclines_no_P(initialstate, params):
+    '''
+    returns the nullclines for N1, N2, F(1), F(2), ..., F(x_max)
+    such that N1, N2 \neq 0
+    @inputs
+    initialstate = [N1, N2, F(1), ..., F(x_max)], type ndarray
+    params = dictionary of params
+    '''
+    N1 = initialstate[0]
+    N2 = initialstate[1]
+    F_of_x_vec = initialstate[2:]
+
+    # get P
+    x_max = params['x_max']
+    xvec = np.arange(1,x_max+1,1)
+    P = np.sum(xvec*F_of_x_vec)
+
+
+    
+    
+
+    N1_null, N2_null = N_nullclines(N1, N2, F_of_x_vec, xvec, **params)
+    dFdT_vec = group_formation_model_non_dim(0, F_of_x_vec,N1,N2, params) # I put 0 for T
+    
+    return [N1_null, N2_null, *dFdT_vec]
+
+def N_nullclines(N1, N2, F_of_x_vec, xvec, η1, η2, A1, H1, H2, **params):
+    '''
+    dN1dT, dN2dT, the change in prey pop size versus time, non-dim'ed, divided by N_i
+    @inputs:
+    N1, N2 - non-dim'ed pred, big prey, and small prey pop sizes
+    F_of_x_vec - array of F(1), F(2), ... , F(x_max)
+    params - dic of params: must at least include H1, H2, α1_of_1, α2_of_1, s1, s2,
+    '''
+
+    A2 = 1 - A1
+    α1 = fun_attack_rate(xvec,1,**params)
+    α2 = fun_attack_rate(xvec,2,**params)
+
+    # prey nonzero nullclines
+    Y1_no_N = α1/(1 + H1*α1*N1 + H2*α2*N2)
+    Y2_no_N = α2/(1 + H1*α1*N1 + H2*α2*N2)
+
+    N1_null = η1 * (1-N1) - A1 * np.sum(F_of_x_vec * Y1_no_N)
+    N2_null = η2 * (1-N2) - A2 * np.sum(F_of_x_vec * Y2_no_N)
+    
+    return N1_null, N2_null
     
     
 def fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, η1, η2, β1, β2, **params):
@@ -240,11 +301,11 @@ def fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, η1, η2, β1, β2, **params):
     total_fitness_per_x = β1 * tildeY1_of_x + β2 * tildeY2_of_x
     return np.sum(F_of_x_vec * total_fitness_per_x) - tildeδ*P
 
-def fun_dN1dT_non_dim(P, N1, N2, F_of_x_vec, η1, A1, **params):
+def fun_dN1dT_non_dim(N1, N2, F_of_x_vec, η1, A1, **params):
     '''
     dN1dT, the change in big prey pop size versus time, non-dim'ed
     @inputs:
-    P, N1, N2 - non-dim'ed pred, big prey, and small prey pop sizes
+    N1, N2 - non-dim'ed pred, big prey, and small prey pop sizes
     F_of_x_vec - array of F(1), F(2), ... , F(x_max)
     params - dic of params: must at least include H1, H2, α1_of_1, α2_of_1, s1, s2,
     η1 - scaled growth rate of big prey
@@ -255,11 +316,11 @@ def fun_dN1dT_non_dim(P, N1, N2, F_of_x_vec, η1, A1, **params):
     tildeY1_of_x = fun_response_non_dim(x_vec,N1,N2,1,**params)
     return η1*N1*(1-N1) - A1 * np.sum(F_of_x_vec * tildeY1_of_x)
 
-def fun_dN2dT_non_dim(P, N1, N2, F_of_x_vec, η2, A1, **params):
+def fun_dN2dT_non_dim(N1, N2, F_of_x_vec, η2, A1, **params):
     '''
     dN2dT, the change in small prey pop size versus time, non-dim'ed
     @inputs:
-    P, N1, N2 - non-dim'ed pred, big prey, and small prey pop sizes
+    N1, N2 - non-dim'ed pred, big prey, and small prey pop sizes
     F_of_x_vec - array of F(1), F(2), ... , F(x_max)
     params - dic of params: must at least include H1, H2, α1_of_1, α2_of_1, s1, s2,
     η2 - scaled growth rate of small prey
@@ -284,4 +345,7 @@ def mean_group_size_membership(F_of_x_vec, x_max, P):
     x_vec = np.arange(1,x_max+1,1)
     frequency_in_group_size_x = (F_of_x_vec*x_vec).T/P
     vec_to_sum = x_vec*frequency_in_group_size_x.T
-    return vec_to_sum.sum(1)
+    if len(vec_to_sum.shape) > 1:
+        return vec_to_sum.sum(1)
+    else:
+        return sum(vec_to_sum)

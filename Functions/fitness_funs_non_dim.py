@@ -64,8 +64,20 @@ def fun_response_non_dim(x, N1, N2, index, H1, H2, **params):
         numerator = α2*N2
     denominator = 1 + α1*H1*N1 + α2*H2*N2
     return numerator/denominator
+def yield_from_prey_non_dim(x,N1,N2,β1, β2, **params):
+    '''
+    this is \tilde{pi} in the model, which is pi/(g1 + g2 + delta)
+    @inputs:
+    x - pred group size
+    N1, N2 - big prey, small prey non-dim'ed pop size
+    β1, β2 - prey profitability for big prey, small prey, respec
+    '''
+    tilde_π = β1 * fun_response_non_dim(x, N1, N2, 1,**params) \
+                          + β2 * fun_response_non_dim(x, N1, N2, 2, **params)
+    return tilde_π
 def per_capita_fitness_from_prey_non_dim(x, N1, N2, β1, β2, **params):
     '''
+    This is \tilde{w} in the model
     @inputs:
     x - pred group size
     N1, N2 - big prey, small prey non-dim'ed pop size
