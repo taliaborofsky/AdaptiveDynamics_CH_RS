@@ -2,14 +2,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fitness_funs_non_dim import *
 from group_w_pop_funs import *
-from scipy.optimize import fsolve
+#from scipy.optimize import fsolve, minimize
 
-colors = ['k','r','b','cyan', 'magenta','orange',
-         'gray', 'green']
+#colors = ['k','r','b','cyan', 'magenta','orange',
+#         'gray', 'green']
+colors = ['r', 'orange', 'magenta', 'purple', 'blue', 'cornflowerblue', 'k']
 markers = ["o","","v", ""]
+Plab = r'$P$, Scaled Pred. Pop Size'
+N1lab = r'$N_1$, Scaled Big Prey'+ '\nPop Size'
+N2lab = r'$N_2$, Scaled Small Prey' + '\n Pop Size'
+Tlab = r'$T$, Scaled time'
+mean_x_lab = "Mean Group Size\n Membership"
+freq_x_lab = r'Freq$(x)$'
+β1lab = r'$\beta_1$'
+Fxlab = r'F$(x)$'
 
 def format_ax(ax,xlab,ylab, xlim = None, ylim=None,
-              fs_labs = 20, fs_legend = 16, if_legend = False):
+              fs_labs = 20, fs_legend = 16, if_legend = False,
+             ncol_legend = 1):
     ax.set_xlabel(xlab, fontsize = fs_labs)
     ax.set_ylabel(ylab, fontsize = fs_labs)
     if xlim != None:
@@ -19,9 +29,9 @@ def format_ax(ax,xlab,ylab, xlim = None, ylim=None,
     for s in ['top', 'right']:
         ax.spines[s].set_visible(False)
     if if_legend:
-        ax.legend(fontsize = fs_legend)
+        ax.legend(fontsize = fs_legend, ncol = ncol_legend)
         
-def get_results(out,x_max):
+def get_results(out2,x_max):
     '''
     gets results from output of simulation
     out: dictionary that's output of solve_ivp
@@ -34,7 +44,7 @@ def get_results(out,x_max):
     F_of_x_vec = out2.y[3:]
     mean_x = mean_group_size_membership(F_of_x_vec.T, x_max, P)
     T = out2.t
-    return T, N1, N2, P, mean_x
+    return T, N1, N2, P, F_of_x_vec, mean_x
 def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
     """
     add an arrow to a line.
@@ -72,11 +82,7 @@ def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
         size=size
     )
     
-Plab = r'$P$, Scaled Pred. Pop Size'
-N1lab = r'$N_1$, Scaled Big Prey Pop Size'
-N2lab = r'$N_2$, Scaled Small Prey Pop Size'
-Tlab = r'$T$, Scaled time'
-mean_x_lab = "Mean Group Size\n Membership"
+
 
 def plot_all(T,N1,N2,P,mean_x, xlim = [-10, 600]):
     fig, ax = plt.subplots(1,1)
@@ -144,7 +150,7 @@ def print_param_caption(ξ, Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of
     
     print(caption)
 
-def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.5, P_0 = 5, F_of_x_vec = None):
+def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 5, F_of_x_vec = None):
     '''
     finds the equilibrium using Fsolve
     if not given F_of_x_vec, then just has everyone initially solitary
@@ -157,13 +163,55 @@ def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.5, P_0 = 5, F_of_x_vec = None):
         F_of_x_vec = np.zeros(x_max)
         F_of_x_vec[0] = P_0
     x0 = [N1_0, N2_0, *F_of_x_vec]
-    out, infodict, ier, mesg = fsolve(func = full_model_no_P, x0 = x0, 
+    out, infodict, ier, mesg = fsolve(func = nullclines_no_P, x0 = x0, 
                                   args = (params), full_output = 1)
     F_eq = out[2:]
     P_eq = np.sum(np.arange(1,x_max+1,1)*F_eq); 
     N1_eq = out[0]
     N2_eq = out[1]
-    mean_x_eq = mean_group_size_membership(F_eq,10,P_eq)
+    mean_x_eq = mean_group_size_membership(F_eq,x_max,P_eq)
 
-    return N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
+    if np.any( np.round(np.array([N1_eq, N2_eq, *F_eq, P_eq, mean_x_eq]),8) <0):
+        return np.nan, np.nan, np.nan, np.nan, np.nan
+    else:
+        return N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
+
+
+def plot_F_equilibrium(paramvec, Fxvecs, xvec, xlab, ylab, 
+                       ncol_legend = 1, xlim = None, ylim = None,
+                       fig = None, ax = None):
+    '''
+    Plots distribution F(x)
+    can take for Fxvecs either F(x) or \bar{F}(x), the frequency of predators in groups of size x
+    '''
+    if ax == None:
+        fig, ax = plt.subplots(1,1)
+        
+    
+    
+    colors_x = ['r', 'orange', 'magenta', 'purple', 'blue', 'cornflowerblue', 'k']
+
+    xmax = len(xvec)
+    if Fxvecs.shape[1] == xmax:
+        Fxvecs = Fxvecs.T
+        
+    for x in xvec:
+        if np.any(Fxvecs[x-1]>1e-2):
+            ax.plot(paramvec, Fxvecs[x-1], colors_x[x-1], label = r'$x=$%d'%x)
+    format_ax(ax,xlab,ylab, fs_labs = 18, fs_legend = 16, if_legend = True,
+             ncol_legend = ncol_legend)
+    return fig, ax
+
+
+def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
+                       ncol_legend = 1, xlim = None, ylim = None,
+                       fig = None, ax = None):
+    prob_x = (xvec*Fxvecs).T/Pvec
+    fig, ax = plot_F_equilibrium(paramvec, prob_x, xvec, xlab, ylab, 
+                       ncol_legend = ncol_legend, xlim = None, ylim = None,
+                       fig = None, ax = None)
+    return fig, ax
+
+def abs_nullclines_no_P(initialstate, params):
+    return np.sum(np.abs(nullclines_no_P(initialstate, params)))
     
