@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fitness_funs_non_dim import *
 from group_w_pop_funs import *
-#from scipy.optimize import fsolve, minimize
+from scipy.optimize import root
 
 #colors = ['k','r','b','cyan', 'magenta','orange',
 #         'gray', 'green']
@@ -102,7 +102,7 @@ def plot_x_vs_y(x,y,xlab,ylab,arrow_inds):
         format_ax(ax, xlab = xlab, ylab = ylab, fs_labs = 18)
     return fig, ax
     
-def plot_portion_x(ax, out, x_max, xlim = [-1,500]):
+def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
     '''
     plots time vs x*F(x)
     @inputs
@@ -150,31 +150,7 @@ def print_param_caption(ξ, Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of
     
     print(caption)
 
-def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 5, F_of_x_vec = None):
-    '''
-    finds the equilibrium using Fsolve
-    if not given F_of_x_vec, then just has everyone initially solitary
-    
-    @returns:
-    N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
-    '''
-    x_max = params['x_max']
-    if ~isinstance(F_of_x_vec, np.ndarray):
-        F_of_x_vec = np.zeros(x_max)
-        F_of_x_vec[0] = P_0
-    x0 = [N1_0, N2_0, *F_of_x_vec]
-    out, infodict, ier, mesg = fsolve(func = nullclines_no_P, x0 = x0, 
-                                  args = (params), full_output = 1)
-    F_eq = out[2:]
-    P_eq = np.sum(np.arange(1,x_max+1,1)*F_eq); 
-    N1_eq = out[0]
-    N2_eq = out[1]
-    mean_x_eq = mean_group_size_membership(F_eq,x_max,P_eq)
 
-    if np.any( np.round(np.array([N1_eq, N2_eq, *F_eq, P_eq, mean_x_eq]),8) <0):
-        return np.nan, np.nan, np.nan, np.nan, np.nan
-    else:
-        return N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
 
 
 def plot_F_equilibrium(paramvec, Fxvecs, xvec, xlab, ylab, 
@@ -201,7 +177,41 @@ def plot_F_equilibrium(paramvec, Fxvecs, xvec, xlab, ylab,
     format_ax(ax,xlab,ylab, fs_labs = 18, fs_legend = 16, if_legend = True,
              ncol_legend = ncol_legend)
     return fig, ax
+def initiate_f_first_x(P0, x_f, x_max):
+    xvec = np.arange(1,x_max+1,1)
+    F0 = np.zeros(x_max)
+    F0[0:x_f] = (P0/x_f)
+    F0 = F0/xvec
+    return F0
+    
+def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
+    '''
+    finds the equilibrium using Fsolve
+    if not given F_of_x_vec, then just has everyone initially solitary
+    
+    @returns:
+    N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
+    '''
+    x_max = params['x_max']
+    xvec = np.arange(1,x_max+1,1)
+    if ~isinstance(F_of_x_vec, np.ndarray):
+        x_f = 2 if x_max > 2 else x_max
+        F0 = initiate_f_first_x(P_0, x_f, x_max)
+        
+    x0 = [N1_0, N2_0, *F0]
+    out = root(fun = nullclines_no_P, x0 = x0, 
+                                  args = (params))
+    return out
+    # F_eq = out[2:]
+    # P_eq = np.sum(xvec*F_eq); 
+    # N1_eq = out[0]
+    # N2_eq = out[1]
+    # mean_x_eq = mean_group_size_membership(F_eq,x_max,P_eq)
 
+    # if np.any( np.round(np.array([N1_eq, N2_eq, *F_eq, P_eq, mean_x_eq]),8) <0):
+    #     return np.nan, np.nan, np.nan, np.nan, np.nan
+    # else:
+    #     return N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
 
 def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
                        ncol_legend = 1, xlim = None, ylim = None,
@@ -214,4 +224,18 @@ def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$',
 
 def abs_nullclines_no_P(initialstate, params):
     return np.sum(np.abs(nullclines_no_P(initialstate, params)))
+
+def plot_W_mode_comparison(xvec,Fxvecs, fig = None, ax = None):
+    if fig == None:
+        fig,ax = plt.subplots(1,1)
+    x_mode = np.argmax(xvec*Fxvecs,1)+1
+    W_of_mode_x_plus_1 = per_capita_fitness_from_prey_non_dim(x_mode + 1, N1vec, N2vec, **params)
+    W_of_mode_x = per_capita_fitness_from_prey_non_dim(x_mode, N1vec, N2vec, **params)
+    W_of_1 = per_capita_fitness_from_prey_non_dim(1, N1vec, N2vec, **params)
+    ax.plot(β1vec, W_of_1, 'k', label = r'solitary')
+    ax.plot(β1vec, W_of_mode_x, 'magenta', label = r'mode$(x)$')
+    ax.plot(β1vec, W_of_mode_x_plus_1 - W_of_1, 'crimson', label = r'mode$(x+1)$')
+
+    format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
+    return fig, ax
     

@@ -30,6 +30,7 @@ def group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params):
     def S(x,y):
         return best_response_fun_given_fitness(x,y,fitnessvec,d)
     def ψ(x):
+        # rate of joining
         F_of_1 = F_of_x_vec[0]
         if x== 1 and F_of_1 >=1:
             return ξ *F_of_1 * S(2,1)#( ξ *F_of_1 - 1) * S(2,1)
@@ -67,7 +68,8 @@ def group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params):
             dFdT = (Q_2 + include_pop_process*(births2+fun_deaths(2)))/Tx
         else:
             Q_x = -F(x)*ϕ(x) - F(x) * ψ(x) + F(x-1)*ψ(x-1) + F(x+1)*ϕ(x+1)
-            birthsx = births_vec[x-2] - births_vec[x-1]
+            
+            birthsx = births_vec[x-2] - births_vec[x-1] if x < x_max else births_vec[x-2]
             dFdT = (Q_x + include_pop_process*(birthsx+fun_deaths(x)))/Tx
         
         dFdT_vec[x-1] = dFdT
