@@ -6,7 +6,8 @@ from scipy.optimize import root
 
 #colors = ['k','r','b','cyan', 'magenta','orange',
 #         'gray', 'green']
-colors = ['r', 'orange', 'magenta', 'purple', 'blue', 'cornflowerblue', 'k']
+colors = ['r', 'orange', 'magenta', 'purple', 'blue', 
+          'cornflowerblue', 'turquoise','k', 'gray']
 markers = ["o","","v", ""]
 Plab = r'$P$, Scaled Pred. Pop Size'
 N1lab = r'$N_1$, Scaled Big Prey'+ '\nPop Size'
@@ -105,6 +106,7 @@ def plot_x_vs_y(x,y,xlab,ylab,arrow_inds):
 def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
     '''
     plots time vs x*F(x)
+    out is output from solve_ivp
     @inputs
     ax is the axis that is already made
     out is the output of solve_ivp
@@ -202,17 +204,48 @@ def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
     out = root(fun = nullclines_no_P, x0 = x0, 
                                   args = (params))
     return out
-    # F_eq = out[2:]
-    # P_eq = np.sum(xvec*F_eq); 
-    # N1_eq = out[0]
-    # N2_eq = out[1]
-    # mean_x_eq = mean_group_size_membership(F_eq,x_max,P_eq)
 
-    # if np.any( np.round(np.array([N1_eq, N2_eq, *F_eq, P_eq, mean_x_eq]),8) <0):
-    #     return np.nan, np.nan, np.nan, np.nan, np.nan
-    # else:
-    #     return N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
+def iterate_and_solve_equilibrium(params, t_f = 1000):
+    x_max = params['x_max']
+    x0 = [3, 0.8, 0.7, *initiate_f_first_x(3, 2, x_max)]
+    out2 = solve_ivp(full_model, [0, t_f], x0, method="LSODA",
+                args=(True,params))
+    T, N1, N2, P, F_of_x_vec, mean_x = get_results(out2, x_max)
 
+    out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], F_of_x_vec = F_of_x_vec[:,-1])
+    P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success =get_results_eq(out,x_max)
+    return P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success
+
+def get_results_eq(out, x_max):
+    x_vec = np.arange(1,x_max+1,1)
+    F_eq = out.x[2:]
+    P_eq = np.sum(xvec*F_eq); 
+    N1_eq = out.x[0]
+    N2_eq = out.x[1]
+    mean_x_eq = mean_group_size_membership(F_eq,x_max,P_eq)
+
+    if np.any(np.array([P_eq, N1_eq, N2_eq, *F_eq, mean_x_eq])<0) or out.success == False:
+        success = False
+        return np.nan, np.nan, np.nan, np.nan, np.nan, success
+    success = True
+    return P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success
+
+def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey, 
+                                α1_of_1 = 0.05, α2_of_1 = 0.95, s1 = 2, 
+                                s2 = 2, α2_fun_type = 'sigmoid', x_max = 10, ξ = 2,
+                                d = 10, Tx = .01):
+    attack_fraction = 1/(1/A1 - 1)
+    β1 = β2 * attack_fraction * weight_fraction_prey**(0.25)
+    H1 = H2 * attack_fraction * weight_fraction_prey**(0.25)
+    η1 = η2 * weight_fraction_prey**(-0.25)
+    params = dict(η1 = η1, η2 = η2, A1 = A1, β1 = β1, β2 = β2, 
+                   H1=H1, H2=H2, 
+                  α1_of_1=α1_of_1, α2_of_1=α2_of_1, 
+                  s1=s1, s2=s2, α2_fun_type = α2_fun_type,
+                  x_max = x_max, ξ = ξ, d = d,
+                 Tx = Tx, r = 0, γ = 0, pop_process = True)
+    return params
+    
 def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
                        ncol_legend = 1, xlim = None, ylim = None,
                        fig = None, ax = None):
@@ -238,4 +271,4 @@ def plot_W_mode_comparison(xvec,Fxvecs, fig = None, ax = None):
 
     format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
     return fig, ax
-    
+
