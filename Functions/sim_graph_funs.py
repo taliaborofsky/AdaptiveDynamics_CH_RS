@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fitness_funs_non_dim import *
 from group_w_pop_funs import *
+from scipy.integrate import solve_ivp
 from scipy.optimize import root
 
 #colors = ['k','r','b','cyan', 'magenta','orange',
@@ -206,18 +207,28 @@ def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
     return out
 
 def iterate_and_solve_equilibrium(params, t_f = 1000):
+    '''
+    iterates from p = 3, N1 = 0.8, N2 = 0.7, 
+    predators split evenly between groups of 1, 2, or 3
+    then uses root to find equilibrium
+
+    @returns
+    P,N1,N2,F,mean_x at equilibrium, 
+    and success (Boolean; true if the equilibria values are all nonnegative)
+    '''
     x_max = params['x_max']
     x0 = [3, 0.8, 0.7, *initiate_f_first_x(3, 2, x_max)]
     out2 = solve_ivp(full_model, [0, t_f], x0, method="LSODA",
                 args=(True,params))
     T, N1, N2, P, F_of_x_vec, mean_x = get_results(out2, x_max)
 
-    out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], F_of_x_vec = F_of_x_vec[:,-1])
+    out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], 
+                          F_of_x_vec = F_of_x_vec[:,-1])
     P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success =get_results_eq(out,x_max)
     return P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success
 
 def get_results_eq(out, x_max):
-    x_vec = np.arange(1,x_max+1,1)
+    xvec = np.arange(1,x_max+1,1)
     F_eq = out.x[2:]
     P_eq = np.sum(xvec*F_eq); 
     N1_eq = out.x[0]
@@ -258,16 +269,19 @@ def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$',
 def abs_nullclines_no_P(initialstate, params):
     return np.sum(np.abs(nullclines_no_P(initialstate, params)))
 
-def plot_W_mode_comparison(xvec,Fxvecs, fig = None, ax = None):
+def plot_W_mode_comparison(xvec,N1vec,N2vec,Fxvecs, params, fig = None, ax = None):
+    '''
+    Plots W(x) for the mode of x, and for x=1, and the mode of x + 1
+    '''
     if fig == None:
         fig,ax = plt.subplots(1,1)
     x_mode = np.argmax(xvec*Fxvecs,1)+1
     W_of_mode_x_plus_1 = per_capita_fitness_from_prey_non_dim(x_mode + 1, N1vec, N2vec, **params)
     W_of_mode_x = per_capita_fitness_from_prey_non_dim(x_mode, N1vec, N2vec, **params)
     W_of_1 = per_capita_fitness_from_prey_non_dim(1, N1vec, N2vec, **params)
-    ax.plot(β1vec, W_of_1, 'k', label = r'solitary')
+    ax.plot(β1vec, W_of_1, 'crimson', label = r'solitary')
     ax.plot(β1vec, W_of_mode_x, 'magenta', label = r'mode$(x)$')
-    ax.plot(β1vec, W_of_mode_x_plus_1 - W_of_1, 'crimson', label = r'mode$(x+1)$')
+    ax.plot(β1vec, W_of_mode_x_plus_1 - W_of_1, 'purple', label = r'mode$(x+1)$')
 
     format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
     return fig, ax

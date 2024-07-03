@@ -113,7 +113,7 @@ def best_response_fun_given_fitness(x,y,fitnessvec, d):
         numerator = (W_of_x/W_max)**d
     else:
         return 0
-    denominator = 1 + numerator # this adjustment helps avoid dividing by zero from numpy rounding
+    denominator = 1 + (W_min/W_max)**d # this adjustment helps avoid dividing by zero from numpy rounding
     return numerator/denominator
     
     # if W_of_x**d + W_of_y**d < 1e-100: # note that then at this point it will be 
@@ -154,7 +154,7 @@ def best_response_fun(x,y, N1,N2, d, **params):
         numerator = (W_of_x/W_max)**d
     else:
         return 0
-    denominator = 1 + numerator
+    denominator = 1 + (W_min/W_max)**d
 
     return W_of_x**d/(W_of_x**d + W_of_y**d)
 
@@ -210,7 +210,15 @@ def model_one_x_evolve(T, initialstate, params):
     return [dPdT, dN1dT, dN2dT, dydT]
 
 def full_model(T, initialstate, arg, params):
-    
+    '''
+    gets the time derivatives for P, N1, N2, F(1), F(2), ..., F(xm)
+    @inputs
+    T is just used by fsolve, not needed
+    intiialstate = [P,N1,N2,*F_of_x]
+    arg is a dummy because fsolve gets weird if there is only 1 arg?
+    params is dictionary of params
+    @ returns [dPdT, dN1dT, dN2dT, *dFdT_vec]
+    '''
     # i put arg there as a place holder because somehow makes ivp_solver work
     
     initialstate = np.array(initialstate)
