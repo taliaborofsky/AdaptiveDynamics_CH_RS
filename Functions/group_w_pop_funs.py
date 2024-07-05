@@ -185,29 +185,6 @@ def model_one_x(T, initialstate, x, params):
     return [dPdT, dN1dT, dN2dT]
 
 
-def model_one_x_evolve(T, initialstate, params):
-    '''
-    Model where all predators approximated as in groups of same size
-    tracks the evolution of the number of helpers.....group members - 1 
-            (so the number of subordinates, perhaps)
-    initialstate = P, N1, N2, y (scaled pop size of preds, big prey, and small prey, and 
-                    num. of helpers)
-
-    @returns:
-    [dPdT, dN1dT, dN2dT, dydT]
-    '''
-    initialstate = np.array(initialstate)
-    initialstate[np.abs(initialstate)<1e-11] = 0
-    P, N1, N2, y= initialstate
-    # y is the number of subordinates. x, group size, is 1 + y
-    F_of_x_vec = np.zeros(params['x_max'])
-    F_of_x = P/(1+y)
-    F_of_x_vec[y] = F_of_x
-    dPdT = fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, **params)
-    dN1dT = fun_dN1dT_non_dim(N1, N2, F_of_x_vec, **params)
-    dN2dT = fun_dN2dT_non_dim(N1, N2, F_of_x_vec, **params)
-    dydT = fun_dydT_non_dim(N1, N2, y, **params)
-    return [dPdT, dN1dT, dN2dT, dydT]
 
 def full_model(T, initialstate, arg, params):
     '''
@@ -279,8 +256,8 @@ def N_nullclines(N1, N2, F_of_x_vec, xvec, η1, η2, A1, H1, H2, **params):
     '''
 
     A2 = 1 - A1
-    α1 = fun_attack_rate(xvec,1,**params)
-    α2 = fun_attack_rate(xvec,2,**params)
+    α1 = fun_alpha1(xvec,**params) 
+    α2 = fun_alpha2(xvec,**params) 
 
     # prey nonzero nullclines
     Y1_no_N = α1/(1 + H1*α1*N1 + H2*α2*N2)
@@ -305,10 +282,10 @@ def fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, η1, η2, β1, β2, **params):
     β1, β2 - scaled profitability of hunting big prey, small prey
     '''
     x_vec = np.arange(1,params['x_max']+1,1)
-    tildeY1_of_x = fun_response_non_dim(x_vec,N1,N2,1,**params)
-    tildeY2_of_x = fun_response_non_dim(x_vec,N1,N2,2,**params)
+    Y1_of_x = fun_Y1(x_vec,N1,N2,**params)
+    Y2_of_x = fun_Y2(x_vec,N1,N2,**params)
     tildeδ = 1 - η1 - η2
-    total_fitness_per_x = β1 * tildeY1_of_x + β2 * tildeY2_of_x
+    total_fitness_per_x = β1 * Y1_of_x + β2 * Y2_of_x
     return np.sum(F_of_x_vec * total_fitness_per_x) - tildeδ*P
 
 def fun_dN1dT_non_dim(N1, N2, F_of_x_vec, η1, A1, **params):
@@ -323,8 +300,8 @@ def fun_dN1dT_non_dim(N1, N2, F_of_x_vec, η1, A1, **params):
     '''
     x_vec = np.arange(1,params['x_max']+1,1)
 
-    tildeY1_of_x = fun_response_non_dim(x_vec,N1,N2,1,**params)
-    return η1*N1*(1-N1) - A1 * np.sum(F_of_x_vec * tildeY1_of_x)
+    Y1_of_x = fun_Y1(x_vec,N1,N2,**params)
+    return η1*N1*(1-N1) - A1 * np.sum(F_of_x_vec * Y1_of_x)
 
 def fun_dN2dT_non_dim(N1, N2, F_of_x_vec, η2, A1, **params):
     '''
@@ -339,9 +316,9 @@ def fun_dN2dT_non_dim(N1, N2, F_of_x_vec, η2, A1, **params):
     A2 = 1 - A1
     x_vec = np.arange(1,params['x_max']+1,1)
 
-    tildeY2_of_x = fun_response_non_dim(x_vec,N1,N2,2,**params)
+    Y2_of_x = fun_Y2(x_vec,N1,N2,**params)
     
-    return η2*N2*(1-N2) - A2 * np.sum(F_of_x_vec * tildeY2_of_x)
+    return η2*N2*(1-N2) - A2 * np.sum(F_of_x_vec * Y2_of_x)
 
 
 

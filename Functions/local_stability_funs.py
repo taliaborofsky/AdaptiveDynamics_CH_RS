@@ -187,3 +187,29 @@ def classify_stability(J):
         return "Marginally stable (needs further analysis)"
     else:
         return "Indeterminate stability (needs further analysis)"
+
+def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, H1, H2, A1, **params):
+    Y1 = fun_Y1(N1,N2,x,**params)
+    Y2 = fun_Y2(N1,N2,x,**params)
+    α2 = fun_alpha2(x, **params)
+    α1 = fun_alpha1(x, **params)
+    td = 1 - η1 - η2
+    A2 = 1 - A1
+    
+    J = np.zeros((3, 3))
+
+    J[0, 0] = -td + (1/x) * (β1 * Y1 + β2 * Y2)
+    J[0, 1] = P / x * β1 * (α1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+    J[0, 2] = P / x * β2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+    
+    
+    J[1, 0] = -A1 * Y1 / x
+    J[1, 1] = η1 * (1 - 2 * N1) - P / x * A1 * (α1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+    J[1, 2] = -P / x * A1 * (α1 * α2 * H2 * N2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+    
+    
+    J[2, 0] = -A2 * Y2 / x
+    J[2, 1] = -P / x * A2 * (α2 * α1 * H1 * N1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+    J[2, 2] = η2 * (1 - 2 * N2) - P / x * A2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+    
+    return J

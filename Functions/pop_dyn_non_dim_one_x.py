@@ -11,27 +11,12 @@ def pop_model_one_grp_size_x_constant(t, initialstate, x, params):
     dN2dT = dN2dT_one_grp_size(P, N1, N2, x, **params)
     return [dPdT, dN1dT, dN2dT]
     
-def pop_model_one_grp_size(t, initialstate, params):
-    P, N1, N2, x = initialstate
-    dPdT = dPdT_one_grp_size(P, N1, N2, x, **params)
-    dN1dT = dN1dT_one_grp_size(P, N1, N2, x, **params)
-    dN2dT = dN2dT_one_grp_size(P, N1, N2, x, **params)
-    dxdT =  dxdT_one_grp_size(P, N1, N2, x, **params)
-    return [dPdT, dN1dT, dN2dT, dxdT]
+def full_system_one_grp(initialstate, x, params):
+    ''' need this for finding roots'''
+    t=0
+    return pop_model_one_grp_size_x_constant(t, initialstate, x, params)
 
-def dxdT_one_grp_size(P,N1,N2,x,Tx, **params):
-    '''
-    dx/dT
-    P, N1, N2 - predator, big prey, small prey non-dimensionalized pop sizes
-    x - group size
-    Tx - nondimensionalized time constant
-    '''
-    def W(x):
-        return fitness_from_prey_non_dim(x, N1, N2, **params)
-    # find tilde W(x+1), tilde W(x), tilde  W(1)
-    term1 = np.heaviside(W(x+1) - W(1),0) # 0 is what I want it to return if they're equal
-    term2 = np.heaviside(W(1) - W(1),0)
-    return (1/Tx) * ( term1 - term2 )
+
     
 def dPdT_one_grp_size(P, N1, N2, x, η1, η2, β1, β2, **params):
     '''

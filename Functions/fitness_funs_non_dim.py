@@ -1,9 +1,24 @@
 import numpy as np
 import scipy as sp
 
+def fun_alpha1(x, α1_of_1, s1, **params):
+    ''' capture prob of big prey'''
+    θ_1 = - np.log(1/α1_of_1 - 1)/(1-s1)
+    return 1/(1 + np.exp(- θ_1 * (x - s1)))
+    
+def fun_alpha2(x, α2_fun_type, α2_of_1, s2, **params):
+    ''' capture prob of small prey'''
+    if α2_fun_type == 'constant':
+        return α2_of_1
+    else:
+        θ_2 = - np.log(1/α2_of_1 - 1)/(1-s2)
+        return 1/(1 + np.exp(- θ_2 * (x - s2)))
+
 def fun_attack_rate(x, index, α1_of_1, α2_of_1, s1, s2, α2_fun_type,
                     **params):
     '''
+    RETIRING THIS BECAUSE IT'S CUMBERSOME...
+    
     The attack rate as a function of x
     
     @inputs:
@@ -33,7 +48,11 @@ def fun_attack_rate(x, index, α1_of_1, α2_of_1, s1, s2, α2_fun_type,
         else:
             θ_2 = - np.log(1/α2_of_1 - 1)/(1-s2)
             return 1/(1 + np.exp(- θ_2 * (x - s2)))
-        
+
+def fun_Y1(x,N1,N2,**params):
+    return fun_response_non_dim(x,N1,N2,1,**params)
+def fun_Y2(x,N1,N2,**params):
+    return fun_response_non_dim(x,N1,N2,2,**params)
 def fun_response_non_dim(x, N1, N2, index, H1, H2, **params):
     '''
     non-dimensionalized functional response to prey as a function of predator group size (x) and 
