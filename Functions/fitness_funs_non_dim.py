@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+# this is written and tested in write_test_pop_dynamics.ipynb
 
 def fun_alpha1(x, α1_of_1, s1, **params):
     ''' capture prob of big prey'''
@@ -75,8 +76,8 @@ def fun_response_non_dim(x, N1, N2, index, H1, H2, **params):
     0.008000000000000002
     '''
     
-    α2 = fun_attack_rate(x,2,**params) 
-    α1 = fun_attack_rate(x,1,**params)
+    α2 = fun_alpha2(x,**params)
+    α1 = fun_alpha1(x,**params)
     if index == 1:
         numerator = α1*N1
     elif index == 2:

@@ -20,10 +20,8 @@ def group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params):
     dF_dT for x = 1, 2, ..., xmax
     '''
     x_max = params['x_max']; Tx = params['Tx']; 
-    η1 = params['η1']; η2 = params['η2']; tildeδ = 1 - η1 - η2
     d = params['d']; ξ = params['ξ']
     F_of_x_vec = np.append(F_of_x_vec,0) # so can find dfdt at x = x_max
-    include_pop_process = 1 if params['pop_process'] == True else 0
 
     def F(x):
         return F_of_x_vec[x-1]
@@ -50,10 +48,18 @@ def group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params):
     fitnessvec = fitness_from_prey_non_dim(xvec, N1, N2, **params)
     dFdT_vec = np.zeros(x_max)
 
-    # births
-    π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params)
-    births_vec = Tx*F_of_x_vec[:-1]* π_vec
-    births_vec = np.append(births_vec,0) # so can calculate births at x_max
+    # births and deaths
+    if params['pop_process']:
+        η1 = params['η1']; η2 = params['η2']; tildeδ = 1 - η1 - η2
+        π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params)
+        births_vec = Tx*F_of_x_vec[:-1]* π_vec
+        births_vec = np.append(births_vec,0) # so can calculate births at x_max
+        deaths_vec = [fun_deaths(x) for x in range(1,x_max+1)]
+    else:
+        π_vec = np.zeros(fitnessvec.shape)
+        births_vec = π_vec.copy()
+        births_vec = np.append(births_vec,0) # so can calculate births at x_max
+        deaths_vec = π_vec.copy()
 
     # balance equations
     for x in xvec:
@@ -61,18 +67,19 @@ def group_formation_model_non_dim(T, F_of_x_vec,N1,N2, params):
             Q_1 = 2*F(2)*ϕ(2) + np.sum([F(y) * ϕ(y) for y in range(3,x_max+1)]) \
                     - sum([F(y-1)*ψ(y-1) for y in range(2,x_max+1)])
             births1 = births_vec[x_max-1] - births_vec[0]
-            dFdT = (Q_1 + include_pop_process*(births1 + fun_deaths(1)))/Tx
+            dFdT = (Q_1 + births1 + deaths_vec[0])/Tx
         elif x == 2:
             Q_2 = -F(2)*ϕ(2) - F(2)*ψ(2) + 0.5*F(1)*ψ(1) + F(3)*ϕ(3)
             births2 = births_vec[0] - births_vec[1]
-            dFdT = (Q_2 + include_pop_process*(births2+fun_deaths(2)))/Tx
+            dFdT = (Q_2 + births2 + deaths_vec[1])/Tx
         else:
             Q_x = -F(x)*ϕ(x) - F(x) * ψ(x) + F(x-1)*ψ(x-1) + F(x+1)*ϕ(x+1)
             
             birthsx = births_vec[x-2] - births_vec[x-1] if x < x_max else births_vec[x-2]
-            dFdT = (Q_x + include_pop_process*(birthsx+fun_deaths(x)))/Tx
+            dFdT = (Q_x + birthsx + deaths_vec[x-1])/Tx
         
         dFdT_vec[x-1] = dFdT
+        
     return dFdT_vec
     
 
@@ -173,6 +180,10 @@ def check_at_equilibrium(final_distribution, P, N1, N2,**params):
         return dFdT_, 1
 
 def model_one_x(T, initialstate, x, params):
+    '''
+    Find the time derivatives of P, N1, N2, with x fixed
+    initialstate = P, N1, N2
+    '''
     initialstate = np.array(initialstate)
     initialstate[np.abs(initialstate)<1e-11] = 0
     P, N1, N2 = initialstate
@@ -282,10 +293,10 @@ def fun_dPdT_non_dim(P, N1, N2, F_of_x_vec, η1, η2, β1, β2, **params):
     β1, β2 - scaled profitability of hunting big prey, small prey
     '''
     x_vec = np.arange(1,params['x_max']+1,1)
-    Y1_of_x = fun_Y1(x_vec,N1,N2,**params)
-    Y2_of_x = fun_Y2(x_vec,N1,N2,**params)
+    tildeY1_of_x = fun_Y1(x_vec,N1,N2,**params)
+    tildeY2_of_x = fun_Y2(x_vec,N1,N2,**params)
     tildeδ = 1 - η1 - η2
-    total_fitness_per_x = β1 * Y1_of_x + β2 * Y2_of_x
+    total_fitness_per_x = β1 * tildeY1_of_x + β2 * tildeY2_of_x
     return np.sum(F_of_x_vec * total_fitness_per_x) - tildeδ*P
 
 def fun_dN1dT_non_dim(N1, N2, F_of_x_vec, η1, A1, **params):
@@ -300,8 +311,8 @@ def fun_dN1dT_non_dim(N1, N2, F_of_x_vec, η1, A1, **params):
     '''
     x_vec = np.arange(1,params['x_max']+1,1)
 
-    Y1_of_x = fun_Y1(x_vec,N1,N2,**params)
-    return η1*N1*(1-N1) - A1 * np.sum(F_of_x_vec * Y1_of_x)
+    tildeY1_of_x = fun_Y1(x_vec,N1,N2,**params)
+    return η1*N1*(1-N1) - A1 * np.sum(F_of_x_vec * tildeY1_of_x)
 
 def fun_dN2dT_non_dim(N1, N2, F_of_x_vec, η2, A1, **params):
     '''

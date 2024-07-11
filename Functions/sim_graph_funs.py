@@ -4,6 +4,8 @@ from fitness_funs_non_dim import *
 from group_w_pop_funs import *
 from scipy.integrate import solve_ivp
 from scipy.optimize import root
+from local_stability_funs import *
+
 
 #colors = ['k','r','b','cyan', 'magenta','orange',
 #         'gray', 'green']
@@ -11,13 +13,14 @@ colors = ['r', 'orange', 'magenta', 'purple', 'blue',
           'cornflowerblue', 'turquoise','k', 'gray']
 markers = ["o","","v", ""]
 Plab = r'$P$, Scaled Pred. Pop Size'
-N1lab = r'$N_1$, Scaled Big Prey'+ '\nPop Size'
-N2lab = r'$N_2$, Scaled Small Prey' + '\n Pop Size'
+N1lab = r'$N_1$, Scaled Big Prey'+ '\nDensity'
+N2lab = r'$N_2$, Scaled Small Prey' + '\nDensity'
 Tlab = r'$T$, Scaled time'
 mean_x_lab = "Mean Group Size\n Membership"
 freq_x_lab = r'Freq$(x)$'
 β1lab = r'$\beta_1$'
 Fxlab = r'F$(x)$'
+figure_ops = dict(bbox_inches = 'tight', dpi = 600)
 
 def format_ax(ax,xlab,ylab, xlim = None, ylim=None,
               fs_labs = 20, fs_legend = 16, if_legend = False,
@@ -124,7 +127,7 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
     portion_x = (xF.T/P).T
     xlist = []
     xflist = []
-    for x in range(1,11):
+    for x in range(1,x_max+1):
         portion_x_curr = portion_x[:,x-1]
         if max(portion_x_curr)>.1:
             xlist.append(x)
@@ -189,7 +192,7 @@ def initiate_f_first_x(P0, x_f, x_max):
     
 def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
     '''
-    finds the equilibrium using Fsolve
+    finds the equilibrium using Fsolve for the population dynamics and group dynamics system
     if not given F_of_x_vec, then just has everyone initially solitary
     
     @returns:
@@ -206,7 +209,7 @@ def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
                                   args = (params))
     return out
 
-def iterate_and_solve_equilibrium(params, t_f = 1000):
+def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8):
     '''
     iterates from p = 3, N1 = 0.8, N2 = 0.7, 
     predators split evenly between groups of 1, 2, or 3
@@ -225,6 +228,11 @@ def iterate_and_solve_equilibrium(params, t_f = 1000):
     out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], 
                           F_of_x_vec = F_of_x_vec[:,-1])
     P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success =get_results_eq(out,x_max)
+
+    # to be successful, sum x*F = P
+    sum_x_F = np.sum(np.arange(1,x_max+1,1)*F_eq)
+    success = success and (np.abs(sum_x_F - P_eq )< tol)
+    
     return P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success
 
 def get_results_eq(out, x_max):
@@ -286,3 +294,89 @@ def plot_W_mode_comparison(xvec,N1vec,N2vec,Fxvecs, params, fig = None, ax = Non
     format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
     return fig, ax
 
+def iterate_to_eq(initialstate, t_f,params):
+    '''
+    try to iterate to eq in t_f time steps
+    '''
+    out2 = solve_ivp(full_model, [0, t_f], initialstate, method="LSODA",
+                args=(True,params))
+
+    # extract results
+    T,N1,N2,P,Fxvec, mean_x = get_results(out2, params['x_max'])
+    N1,N2,P,mean_x = [ item[-1] for item in [N1,N2,P,mean_x]]
+    F = Fxvec[:,-1]
+    timederivatives = full_model(T[-1], [P,N1,N2,*F],True,params)
+    success = np.all(np.abs(np.array(timederivatives)) < 1e-9)
+    
+    
+    return np.array([P, N1, N2, *F]), success, mean_x, full_trajectory
+    
+def get_equilibria_vary_param(paramvec, paramkey, **params):
+    '''
+    Get a list of equilibrium values corresponding to the parameters
+    '''
+
+    
+
+
+
+    x_max = params['x_max']
+    xvec = np.arange(1,x_max+1,1)
+    Pvec = np.zeros(len(paramvec))
+    meanxvec = np.zeros(len(paramvec))
+    Fxvecs  = np.zeros((len(paramvec), x_max))
+    N1vec = Pvec.copy()
+    N2vec = Pvec.copy()
+    success_vec = Pvec.copy()
+    stability_vec = Pvec.copy()
+    
+    for i, param in enumerate(paramvec):
+        params = params.copy()
+        params[paramkey] = param
+
+        # try to use root #
+        
+        out_eq = iterate_and_solve_equilibrium(params, t_f = 5)
+        P, N1, N2, F, mean_x, success = out_eq
+        
+        if success==False:
+            # try to get to equilibrium in just 200 steps #
+            
+            t_f = 500
+            initialstate = [3,0.5,0.4, 1, *np.zeros(x_max-1)]
+            finalpoint, success, mean_x, full_trajectory = iterate_to_eq(initialstate, t_f,
+                                                                         params)
+
+            # if that doesn't work, now do another 2000 steps
+            if success == False:
+                out = iterate_to_eq(finalpoint, 2000,params)   
+                finalpoint, success, mean_x, full_trajectory = out
+
+            P,N1,N2 = finalpoint[0:3]
+            F = finalpoint[3:]
+        success_vec[i] = success
+        
+        Fxvecs[i,:] = F
+        Pvec[i] = P
+        N1vec[i] = N1
+        N2vec[i] = N2
+        meanxvec[i] = mean_x
+
+
+        # check stability
+        try:
+            if np.any(np.isnan(np.array([P,N1,N2,*F]))):
+                stability_vec[i] = np.nan
+        except TypeError:
+            stability_vec[i] = np.nan
+        else:
+            J = fun_Jac(N1,N2,np.array(F),**params)
+            stability = classify_stability(J)
+            if stability == "Stable (attractive)":
+                stability_vec[i] = 1
+            elif stability == "Unstable":
+                stability_vec[i] = -1
+            else:
+                stability_vec[i] = 0
+        
+    return Pvec, N1vec, N2vec, Fxvecs,meanxvec,success_vec, stability_vec

@@ -1,6 +1,7 @@
 import numpy as np
 from fitness_funs_non_dim import *
 from group_w_pop_funs import *
+from scipy.linalg import eigvals
 
 def fun_Jac(N1,N2,Fvec,**params):
     x_max = params['x_max']
@@ -23,7 +24,7 @@ def fun_Jac_groups(N1, N2, Fvec, grad_Y_1, grad_Y_2, xvec, x_max, Tx, ξ,d,
                    η1, η2, **params):
     
     Jac = np.zeros((len(Fvec),len(Fvec)+2))
-
+    
     partial_π = params['β1'] * grad_Y_1 + params['β2'] * grad_Y_2
     π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params)
     fitnessvec = π_vec/xvec
@@ -92,14 +93,67 @@ def fun_Jac_groups(N1, N2, Fvec, grad_Y_1, grad_Y_2, xvec, x_max, Tx, ξ,d,
                                            
     
     return Jac
+
+def fun_Jac_groups_nopop(N1, N2, Fvec, x_max, Tx, ξ,d, **params):
+    '''
+    Finds the Jacobian for group dynamics with no populatin dynamics
+    '''
+    
+    Jac = np.zeros((len(Fvec),len(Fvec)+2))
+    
+    def F(x):
+        return Fvec[x-1]
+    def S(x,y=1):
+        return best_response_fun_given_fitness(x,y,fitnessvec,d)
+
+        
+    # first row    
+    Q1_F1 = (-2*ξ*F(1)*S(2,1) - sum([F(x)*ξ*S(x+1,1) \
+                                       for x in range(2,x_max)]))/Tx 
+    Q1_F2 = (4*(1-S(2)) - ξ*F(1)*S(3))/Tx 
+    Q1_Fx = [(x*(1-S(x)) - ξ*F(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
+    Q1_Fxmax = x_max*(1 - S(x_max))/Tx 
+    Jac[0,:] = np.array([Q1_F1, Q1_F2, *Q1_Fx, Q1_Fxmax])
+
+    # second row
+    Q2_F = np.zeros(len(Fvec))
+    Q2_F[0] = (ξ/Tx)* (F(1) * S(2) - F(2) * S(3)) # partial wrt F(1)
+    Q2_F[1] = -(1/Tx) * (2* (1 - S(2)) + ξ*F(1)*S(3)) 
+    Q2_F[2] = (3/Tx)*(1 - S(3)) 
+    
+    Jac[1,:] = Q2_F
+
+    # 3rd through 2nd to last row (for 2 < x < x_max)
+    
+    for x in range(3,x_max):
+        
+        Qx_F = np.zeros(len(Fvec))
+        
+        Qx_F[0] = (ξ/Tx)* (F(x-1)*S(x) - F(x)*S(x+1)) # wrt F(1)
+        Qx_F[x-2] = (ξ/Tx) * F(1)*S(x) # wrt F(x-1)
+        Qx_F[x-1] = -(1/Tx) * (x*(1 - S(x)) + ξ*F(1)*S(x+1)) # wrt F(x)
+        Qx_F[x] = (1/Tx)*(x+1)*(1-S(x+1)) # wrt F(x+1)
+
+        Jac[x-1,:] = Qx_F
+
+
+
+    Qxmax_F = np.zeros(len(Fvec))
+    Qxmax_F[0] = (ξ/Tx)*F(x_max-1)*S(x_max,1)
+    Qxmax_F[x_max-2] = (ξ/Tx)*F(1)*S(x_max,1)  # wrt F(x-1)
+    Qxmax_F[x_max-1] = -(1/Tx)*x_max*S(1,x_max) 
+    Jac[-1,:] = Qxmax_F
+                                           
+    
+    return Jac
         
 def fun_grad_func_response(i,x, N1,N2,H1,H2,**params):
     '''
     The gradient of the (scaled) functional response on prey i wrt N1, N2
     returns an array with 2 rows (N1, N2) and x_max columns
     '''
-    alpha1 = fun_attack_rate(x, 1,**params)
-    alpha2 = fun_attack_rate(x,2,**params)
+    alpha1 = fun_alpha1(x,**params)
+    alpha2 = fun_alpha2(x,**params)
     denom = (1 + alpha1 * H1 * N1 + alpha2 * H2 * N2)**2
     if i == 1:
         return np.array([ alpha1*(1 + alpha2 * H2 * N2), 
@@ -188,7 +242,9 @@ def classify_stability(J):
     else:
         return "Indeterminate stability (needs further analysis)"
 
-def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, H1, H2, A1, **params):
+def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, A1, β1, β2, **params):
+    H1 = params['H1']
+    H2=params['H2']
     Y1 = fun_Y1(N1,N2,x,**params)
     Y2 = fun_Y2(N1,N2,x,**params)
     α2 = fun_alpha2(x, **params)
@@ -213,3 +269,4 @@ def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, H1, H2, A1, **params):
     J[2, 2] = η2 * (1 - 2 * N2) - P / x * A2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
     
     return J
+
