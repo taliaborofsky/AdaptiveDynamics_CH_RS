@@ -43,7 +43,7 @@ def get_results(out2,x_max):
     x_max: max group size
 
     @returns:
-    T, N1, N2, P, mean_x
+    T, N1, N2, P, F_of_x_vec, mean_x
     '''
     P, N1, N2 = out2.y[0:3]
     F_of_x_vec = out2.y[3:]
