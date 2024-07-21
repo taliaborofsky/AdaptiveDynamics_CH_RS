@@ -141,10 +141,10 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
               fs_labs = 20, fs_legend = 16, if_legend = True)
     return fig, ax
 
-def print_param_caption(ξ, Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of_1, 
+def print_param_caption(Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of_1, 
                         s1, s2, α2_fun_type,**params):
     caption = 'The parameters are '
-    caption += f'$\\xi = {ξ}, \\eta_1 = {η1}, \\eta_2 = {η2}, '
+    caption += f'$\\eta_1 = {η1}, \\eta_2 = {η2}, '
     caption += f'A_1 = {A1}, \\beta_1 = {β1}, \\beta_2 = {β2}, '
     caption += f'H_1 = {H1}, H_2 = {H2}, T_x = {Tx}, ' 
     if α2_fun_type == 'constant':
@@ -251,7 +251,7 @@ def get_results_eq(out, x_max):
 
 def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey, 
                                 α1_of_1 = 0.05, α2_of_1 = 0.95, s1 = 2, 
-                                s2 = 2, α2_fun_type = 'sigmoid', x_max = 10, ξ = 2,
+                                s2 = 2, α2_fun_type = 'sigmoid', x_max = 10, 
                                 d = 10, Tx = .01):
     attack_fraction = 1/(1/A1 - 1)
     β1 = β2 * attack_fraction * weight_fraction_prey**(0.25)
@@ -261,7 +261,7 @@ def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey,
                    H1=H1, H2=H2, 
                   α1_of_1=α1_of_1, α2_of_1=α2_of_1, 
                   s1=s1, s2=s2, α2_fun_type = α2_fun_type,
-                  x_max = x_max, ξ = ξ, d = d,
+                  x_max = x_max, d = d,
                  Tx = Tx, r = 0, γ = 0, pop_process = True)
     return params
     
