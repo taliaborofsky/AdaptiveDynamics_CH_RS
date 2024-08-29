@@ -12,7 +12,8 @@ from local_stability_funs import *
 colors = ['r', 'orange', 'magenta', 'purple', 'blue', 
           'cornflowerblue', 'turquoise','k', 'gray']
 markers = ["o","","v", ""]
-Plab = r'$P$, Scaled Pred. Pop Size'
+Plab = r'$p$,  Pred. Pop Density'
+Pscaledlab = r'$P$,  Pred. Scaled Density'
 N1lab = r'$N_1$, Scaled Big Prey'+ '\nDensity'
 N2lab = r'$N_2$, Scaled Small Prey' + '\nDensity'
 Tlab = r'$T$, Scaled time'
@@ -45,11 +46,13 @@ def get_results(out2,x_max):
     @returns:
     T, N1, N2, P, F_of_x_vec, mean_x
     '''
-    P, N1, N2 = out2.y[0:3]
-    F_of_x_vec = out2.y[3:]
-    mean_x = mean_group_size_membership(F_of_x_vec.T, x_max, P)
+    N1, N2 = out2.y[0:2]
+    f_of_x_vec = out2.y[2:]
+    xvec = np.arange(1,x_max+1,1)
+    p = np.sum(xvec*f_of_x_vec.T,1)
+    mean_x = mean_group_size_membership(f_of_x_vec.T, x_max, p)
     T = out2.t
-    return T, N1, N2, P, F_of_x_vec, mean_x
+    return T, N1, N2, p, f_of_x_vec, mean_x
 def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
     """
     add an arrow to a line.
@@ -89,11 +92,11 @@ def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
     
 
 
-def plot_all(T,N1,N2,P,mean_x, xlim = [-10, 600]):
+def plot_all(T,N1,N2,p,mean_x, xlim = [-10, 600]):
     fig, ax = plt.subplots(1,1)
     ax.plot(T,N2,'k', label = r'$N_2$')
     ax.plot(T,N1,'r', label = r'$N_1$')
-    ax.plot(T,P,'b', label = r'$P$')
+    ax.plot(T,p,'b', label = r'$p$')
     if isinstance(mean_x, np.ndarray):
         ax.plot(T, mean_x, 'magenta', label = r'$\bar{x}$')
     format_ax(ax, xlab = Tlab,ylab = '',if_legend = True,
@@ -107,9 +110,9 @@ def plot_x_vs_y(x,y,xlab,ylab,arrow_inds):
         format_ax(ax, xlab = xlab, ylab = ylab, fs_labs = 18)
     return fig, ax
     
-def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
+def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500], ncol_legend = 1):
     '''
-    plots time vs x*F(x)
+    plots time vs x*f(x)
     out is output from solve_ivp
     @inputs
     ax is the axis that is already made
@@ -119,12 +122,18 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
     '''
     T = out.t
     print(T[-1])
-    F_of_x_vec = out.y[3:]
-    P = out.y[0]
-    # find F_of_x that are big enough
+    F_of_x_vec = out.y[2:]
+
     xvec = np.arange(1,x_max+1,1)
     xF = xvec*F_of_x_vec.T
-    portion_x = (xF.T/P).T
+
+    p = np.sum(xF,1)
+    
+    # find F_of_x that are big enough
+    portion_x = (xF.T/p).T
+
+    portion_x[p<1e-10] = np.nan
+    
     xlist = []
     xflist = []
     for x in range(1,x_max+1):
@@ -137,8 +146,8 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500]):
     for i, portion_x_curr in enumerate(xflist):
         ax.plot(T, portion_x_curr, label = labels[i], c = colors[i])
         
-    format_ax(ax,Tlab,r'$xF(x)/P$', xlim = xlim, ylim=None,
-              fs_labs = 20, fs_legend = 16, if_legend = True)
+    format_ax(ax,Tlab,r'$xf(x)/p$', xlim = xlim, ylim=None,
+              fs_labs = 20, fs_legend = 16, if_legend = True, ncol_legend = ncol_legend)
     return fig, ax
 
 def print_param_caption(Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of_1, 
@@ -183,6 +192,7 @@ def plot_F_equilibrium(paramvec, Fxvecs, xvec, xlab, ylab,
     format_ax(ax,xlab,ylab, fs_labs = 18, fs_legend = 16, if_legend = True,
              ncol_legend = ncol_legend)
     return fig, ax
+    
 def initiate_f_first_x(P0, x_f, x_max):
     xvec = np.arange(1,x_max+1,1)
     F0 = np.zeros(x_max)
@@ -190,7 +200,7 @@ def initiate_f_first_x(P0, x_f, x_max):
     F0 = F0/xvec
     return F0
     
-def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
+def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, p_0 = 20, F_of_x_vec = None):
     '''
     finds the equilibrium using Fsolve for the population dynamics and group dynamics system
     if not given F_of_x_vec, then just has everyone initially solitary
@@ -200,11 +210,12 @@ def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, P_0 = 3, F_of_x_vec = None):
     '''
     x_max = params['x_max']
     xvec = np.arange(1,x_max+1,1)
-    if ~isinstance(F_of_x_vec, np.ndarray):
+    if not isinstance(F_of_x_vec, np.ndarray):
+        print('hi')
         x_f = 2 if x_max > 2 else x_max
-        F0 = initiate_f_first_x(P_0, x_f, x_max)
+        F_of_x_vec = initiate_f_first_x(p_0, x_f, x_max)
         
-    x0 = [N1_0, N2_0, *F0]
+    x0 = [N1_0, N2_0, *F_of_x_vec]
     out = root(fun = nullclines_no_P, x0 = x0, 
                                   args = (params))
     return out
@@ -220,10 +231,10 @@ def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8):
     and success (Boolean; true if the equilibria values are all nonnegative)
     '''
     x_max = params['x_max']
-    x0 = [3, 0.8, 0.7, *initiate_f_first_x(3, 2, x_max)]
+    x0 = [0.8, 0.7, *initiate_f_first_x(20, 2, x_max)]
     out2 = solve_ivp(full_model, [0, t_f], x0, method="LSODA",
                 args=(True,params))
-    T, N1, N2, P, F_of_x_vec, mean_x = get_results(out2, x_max)
+    T, N1, N2, p, F_of_x_vec, mean_x = get_results(out2, x_max)
 
     out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], 
                           F_of_x_vec = F_of_x_vec[:,-1])
@@ -294,7 +305,7 @@ def plot_W_mode_comparison(xvec,N1vec,N2vec,Fxvecs, params, fig = None, ax = Non
     format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
     return fig, ax
 
-def iterate_to_eq(initialstate, t_f,params):
+def iterate_to_eq(initialstate, t_f, params):
     '''
     try to iterate to eq in t_f time steps
     '''
@@ -303,32 +314,36 @@ def iterate_to_eq(initialstate, t_f,params):
 
     # extract results
     T,N1,N2,P,Fxvec, mean_x = get_results(out2, params['x_max'])
+    full_trajectory = [T, N1, N2, P, Fxvec]
+    # get values at potential equilibrium
+    
     N1,N2,P,mean_x = [ item[-1] for item in [N1,N2,P,mean_x]]
     F = Fxvec[:,-1]
-    timederivatives = full_model(T[-1], [P,N1,N2,*F],True,params)
+    
+    timederivatives = full_model(T[-1], [N1,N2,*F],True,params)
+    
     success = np.all(np.abs(np.array(timederivatives)) < 1e-9)
     
     
-    return np.array([P, N1, N2, *F]), success, mean_x, full_trajectory
+    return np.array([P, N1, N2, *F]), success, mean_x, timederivatives, full_trajectory
     
 def get_equilibria_vary_param(paramvec, paramkey, **params):
     '''
     Get a list of equilibrium values corresponding to the parameters
     '''
 
-    
-
-
 
     x_max = params['x_max']
     xvec = np.arange(1,x_max+1,1)
-    Pvec = np.zeros(len(paramvec))
+
+    # set up empty vectors
     meanxvec = np.zeros(len(paramvec))
     Fxvecs  = np.zeros((len(paramvec), x_max))
-    N1vec = Pvec.copy()
-    N2vec = Pvec.copy()
-    success_vec = Pvec.copy()
-    stability_vec = Pvec.copy()
+    Pvec = meanxvec.copy()
+    N1vec = meanxvec.copy()
+    N2vec = meanxvec.copy()
+    success_vec = meanxvec.copy()
+    stability_vec = meanxvec.copy()
     
     for i, param in enumerate(paramvec):
         params = params.copy()
@@ -343,17 +358,17 @@ def get_equilibria_vary_param(paramvec, paramkey, **params):
             # try to get to equilibrium in just 200 steps #
             
             t_f = 500
-            initialstate = [3,0.5,0.4, 1, *np.zeros(x_max-1)]
-            finalpoint, success, mean_x, full_trajectory = iterate_to_eq(initialstate, t_f,
+            initialstate = [0.5,0.4, 20, *np.zeros(x_max-1)]
+            finalpoint, success, mean_x, _, _ = iterate_to_eq(initialstate, t_f,
                                                                          params)
 
             # if that doesn't work, now do another 2000 steps
             if success == False:
-                out = iterate_to_eq(finalpoint, 2000,params)   
-                finalpoint, success, mean_x, full_trajectory = out
-
-            P,N1,N2 = finalpoint[0:3]
-            F = finalpoint[3:]
+                out = iterate_to_eq(finalpoint[1:], 5000,params)   
+                finalpoint, success, mean_x, _, _ = out
+            
+            [P,N1,N2,*F] = finalpoint
+            
         success_vec[i] = success
         
         Fxvecs[i,:] = F

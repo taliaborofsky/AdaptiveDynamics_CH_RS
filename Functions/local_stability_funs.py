@@ -3,10 +3,10 @@ from fitness_funs_non_dim import *
 from group_w_pop_funs import *
 from scipy.linalg import eigvals
 
-def fun_Jac(N1,N2,Fvec,**params):
+def fun_Jac(N1,N2,fvec,**params):
     x_max = params['x_max']
     xvec = np.arange(1,x_max+1,1)
-    size = len(Fvec)+2
+    size = len(fvec)+2
 
 
     # stuff used for multiple rows that speeds it up
@@ -14,16 +14,16 @@ def fun_Jac(N1,N2,Fvec,**params):
     grad_Y_2 = fun_grad_func_response(2,xvec,N1,N2,**params)
     
     Jac = np.zeros((size,size))
-    Jac[0,:] = fun_grad_big_prey(N1, N2, Fvec, grad_Y_1, **params)
-    Jac[1,:] = fun_grad_small_prey(N1, N2, Fvec, grad_Y_2, **params)
-    Jac[2:,:] = fun_Jac_groups(N1, N2, Fvec, grad_Y_1, grad_Y_2, xvec, **params)
+    Jac[0,:] = fun_grad_big_prey(N1, N2, fvec, grad_Y_1, **params)
+    Jac[1,:] = fun_grad_small_prey(N1, N2, fvec, grad_Y_2, **params)
+    Jac[2:,:] = fun_Jac_groups(N1, N2, fvec, grad_Y_1, grad_Y_2, xvec, **params)
 
     return Jac
 
-def fun_Jac_groups(N1, N2, Fvec, grad_Y_1, grad_Y_2, xvec, x_max, Tx, ξ,d,
+def fun_Jac_groups(N1, N2, fvec, grad_Y_1, grad_Y_2, xvec, x_max, Tx, d,
                    η1, η2, **params):
     
-    Jac = np.zeros((len(Fvec),len(Fvec)+2))
+    Jac = np.zeros((len(fvec),len(fvec)+2))
     
     partial_π = params['β1'] * grad_Y_1 + params['β2'] * grad_Y_2
     π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params)
@@ -31,8 +31,8 @@ def fun_Jac_groups(N1, N2, Fvec, grad_Y_1, grad_Y_2, xvec, x_max, Tx, ξ,d,
     partial_S_vec = [fun_partial_S_wrt_prey(N1, N2, x, partial_π, x_max,d,**params) \
                                  for x in range(2,x_max+1)]
     td = 1 - η1 - η2
-    def F(x):
-        return Fvec[x-1]
+    def f(x):
+        return fvec[x-1]
     def partial_S(x):
         return partial_S_vec[x-2]
     def S(x,y=1):
@@ -41,108 +41,108 @@ def fun_Jac_groups(N1, N2, Fvec, grad_Y_1, grad_Y_2, xvec, x_max, Tx, ξ,d,
         return π_vec[x-1]
         
     # first row
-    Q1_Ni_group = (1/Tx) * (2*F(2) * partial_S(2) + \
-                       np.sum(np.array([partial_S(x) * ( x * F(x) + ξ * F(1) * F(x-1)) \
+    Q1_Ni_group = (1/Tx) * (2*f(2) * partial_S(2) + \
+                       np.sum(np.array([partial_S(x) * ( x * f(x) + f(1) * f(x-1)) \
                                for x in range(2,x_max+1)]),0))
-    Q1_Ni_pop = F(x_max) * partial_π[:,-1] - F(1) * partial_π[:,0]
+    Q1_Ni_pop = f(x_max) * partial_π[:,-1] - f(1) * partial_π[:,0]
     Q1_Ni = Q1_Ni_group + Q1_Ni_pop
     
-    Q1_F1 = (-2*ξ*F(1)*S(2,1) - sum([F(x)*ξ*S(x+1,1) \
+    Q1_f1 = (-2*f(1)*S(2,1) - sum([f(x)*S(x+1,1) \
                                        for x in range(2,x_max)]))/Tx - π(1) - td
-    Q1_F2 = (4*(1-S(2)) - ξ*F(1)*S(3))/Tx + 2*td
-    Q1_Fx = [(x*(1-S(x)) - ξ*F(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
-    Q1_Fxmax = x_max*(1 - S(x_max))/Tx + π(x_max)
-    Jac[0,:] = np.array([*Q1_Ni, Q1_F1, Q1_F2, *Q1_Fx, Q1_Fxmax])
+    Q1_f2 = (4*(1-S(2)) - f(1)*S(3))/Tx + 2*td
+    Q1_fx = [(x*(1-S(x)) - f(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
+    Q1_fxmax = x_max*(1 - S(x_max))/Tx + π(x_max)
+    Jac[0,:] = np.array([*Q1_Ni, Q1_f1, Q1_f2, *Q1_fx, Q1_fxmax])
 
     # second row
-    Q2_Ni = (1/Tx) * ( - partial_S(2) * (2*F(2) + 0.5*ξ*(F(1))**2) \
-                            + partial_S(3)*(3*F(3) + ξ*F(1)*F(2))) \
-                        + F(1)*partial_π[:,0] - F(2)*partial_π[:,1]
-    Q2_F = np.zeros(len(Fvec))
-    Q2_F[0] = (ξ/Tx)* (F(1) * S(2) - F(2) * S(3)) + π(1)# partial wrt F(1)
-    Q2_F[1] = -(1/Tx) * (2* (1 - S(2)) + ξ*F(1)*S(3)) - π(2) - 2*td
-    Q2_F[2] = (3/Tx)*(1 - S(3)) + 3 * td
+    Q2_Ni = (1/Tx) * ( - partial_S(2) * (2*f(2) + 0.5*(f(1))**2) \
+                            + partial_S(3)*(3*f(3) + f(1)*f(2))) \
+                        + f(1)*partial_π[:,0] - f(2)*partial_π[:,1]
+    Q2_f = np.zeros(len(fvec))
+    Q2_f[0] = (1/Tx)* (f(1) * S(2) - f(2) * S(3)) + π(1)# partial wrt f(1)
+    Q2_f[1] = -(1/Tx) * (2* (1 - S(2)) + f(1)*S(3)) - π(2) - 2*td
+    Q2_f[2] = (3/Tx)*(1 - S(3)) + 3 * td
     
-    Jac[1,:] = np.array([*Q2_Ni, *Q2_F])
+    Jac[1,:] = np.array([*Q2_Ni, *Q2_f])
 
     # 3rd through 2nd to last row (for 2 < x < x_max)
     
     for x in range(3,x_max):
-        Qx_Ni = (1/Tx) * (partial_S(x+1) *( (x+1)*F(x+1) + ξ*F(1)*F(x) ) \
-                          - partial_S(x)*(x*F(x) + ξ*F(1)*F(x-1)))\
-                    + F(x-1)*partial_π[:,x-2] - F(x) * partial_π[:,x-1]
+        Qx_Ni = (1/Tx) * (partial_S(x+1) *( (x+1)*f(x+1) + f(1)*f(x) ) \
+                          - partial_S(x)*(x*f(x) + f(1)*f(x-1)))\
+                    + f(x-1)*partial_π[:,x-2] - f(x) * partial_π[:,x-1]
         
-        Qx_F = np.zeros(len(Fvec))
+        Qx_f = np.zeros(len(fvec))
         
-        Qx_F[0] = (ξ/Tx)* (F(x-1)*S(x) - F(x)*S(x+1)) # wrt F(1)
-        Qx_F[x-2] = (ξ/Tx) * F(1)*S(x) + π(x-1) # wrt F(x-1)
-        Qx_F[x-1] = -(1/Tx) * (x*(1 - S(x)) + ξ*F(1)*S(x+1)) - π(x) - x*td # wrt F(x)
-        Qx_F[x] = (1/Tx)*(x+1)*(1-S(x+1)) + (x+1)*td # wrt F(x+1)
+        Qx_f[0] = (1/Tx)* (f(x-1)*S(x) - f(x)*S(x+1)) # wrt f(1)
+        Qx_f[x-2] = (1/Tx) * f(1)*S(x) + π(x-1) # wrt f(x-1)
+        Qx_f[x-1] = -(1/Tx) * (x*(1 - S(x)) + f(1)*S(x+1)) - π(x) - x*td # wrt f(x)
+        Qx_f[x] = (1/Tx)*(x+1)*(1-S(x+1)) + (x+1)*td # wrt f(x+1)
 
-        Jac[x-1,:] = np.array([*Qx_Ni,*Qx_F])
+        Jac[x-1,:] = np.array([*Qx_Ni,*Qx_f])
 
 
-    # last row, F(x_max)
-    Qxmax_Ni = -(1/Tx)*partial_S(x_max) * (x_max*F(x_max) + ξ*F(1)*F(x_max-1)) \
-                + F(x_max-1)*partial_π[:,x_max-2] - F(x_max) * partial_π[:,x_max-1]
-    Qxmax_F = np.zeros(len(Fvec))
-    Qxmax_F[0] = (ξ/Tx)*F(x_max-1)*S(x_max,1)
-    Qxmax_F[x_max-2] = (ξ/Tx)*F(1)*S(x_max,1) + π(x_max-1) # wrt F(x-1)
-    Qxmax_F[x_max-1] = -(1/Tx)*x_max*S(1,x_max) - x_max*td
-    Jac[-1,:] = np.array([*Qxmax_Ni, *Qxmax_F])
+    # last row, f(x_max)
+    Qxmax_Ni = -(1/Tx)*partial_S(x_max) * (x_max*f(x_max) + f(1)*f(x_max-1)) \
+                + f(x_max-1)*partial_π[:,x_max-2] - f(x_max) * partial_π[:,x_max-1]
+    Qxmax_f = np.zeros(len(fvec))
+    Qxmax_f[0] = (1/Tx)*f(x_max-1)*S(x_max,1)
+    Qxmax_f[x_max-2] = (1/Tx)*f(1)*S(x_max,1) + π(x_max-1) # wrt f(x-1)
+    Qxmax_f[x_max-1] = -(1/Tx)*x_max*S(1,x_max) - x_max*td
+    Jac[-1,:] = np.array([*Qxmax_Ni, *Qxmax_f])
                                            
     
     return Jac
 
-def fun_Jac_groups_nopop(N1, N2, Fvec, x_max, Tx, ξ,d, **params):
+def fun_Jac_groups_nopop(N1, N2, fvec, x_max, Tx, d, **params):
     '''
     Finds the Jacobian for group dynamics with no populatin dynamics
     '''
     
-    Jac = np.zeros((len(Fvec),len(Fvec)+2))
+    Jac = np.zeros((len(fvec),len(fvec)+2))
     
-    def F(x):
-        return Fvec[x-1]
+    def f(x):
+        return fvec[x-1]
     def S(x,y=1):
         return best_response_fun_given_fitness(x,y,fitnessvec,d)
 
         
     # first row    
-    Q1_F1 = (-2*ξ*F(1)*S(2,1) - sum([F(x)*ξ*S(x+1,1) \
+    Q1_f1 = (-2*f(1)*S(2,1) - sum([f(x)*S(x+1,1) \
                                        for x in range(2,x_max)]))/Tx 
-    Q1_F2 = (4*(1-S(2)) - ξ*F(1)*S(3))/Tx 
-    Q1_Fx = [(x*(1-S(x)) - ξ*F(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
-    Q1_Fxmax = x_max*(1 - S(x_max))/Tx 
-    Jac[0,:] = np.array([Q1_F1, Q1_F2, *Q1_Fx, Q1_Fxmax])
+    Q1_f2 = (4*(1-S(2)) - f(1)*S(3))/Tx 
+    Q1_fx = [(x*(1-S(x)) - f(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
+    Q1_fxmax = x_max*(1 - S(x_max))/Tx 
+    Jac[0,:] = np.array([Q1_f1, Q1_f2, *Q1_fx, Q1_fxmax])
 
     # second row
-    Q2_F = np.zeros(len(Fvec))
-    Q2_F[0] = (ξ/Tx)* (F(1) * S(2) - F(2) * S(3)) # partial wrt F(1)
-    Q2_F[1] = -(1/Tx) * (2* (1 - S(2)) + ξ*F(1)*S(3)) 
-    Q2_F[2] = (3/Tx)*(1 - S(3)) 
+    Q2_f = np.zeros(len(fvec))
+    Q2_f[0] = (1/Tx)* (f(1) * S(2) - f(2) * S(3)) # partial wrt f(1)
+    Q2_f[1] = -(1/Tx) * (2* (1 - S(2)) + f(1)*S(3)) 
+    Q2_f[2] = (3/Tx)*(1 - S(3)) 
     
-    Jac[1,:] = Q2_F
+    Jac[1,:] = Q2_f
 
     # 3rd through 2nd to last row (for 2 < x < x_max)
     
     for x in range(3,x_max):
         
-        Qx_F = np.zeros(len(Fvec))
+        Qx_f = np.zeros(len(fvec))
         
-        Qx_F[0] = (ξ/Tx)* (F(x-1)*S(x) - F(x)*S(x+1)) # wrt F(1)
-        Qx_F[x-2] = (ξ/Tx) * F(1)*S(x) # wrt F(x-1)
-        Qx_F[x-1] = -(1/Tx) * (x*(1 - S(x)) + ξ*F(1)*S(x+1)) # wrt F(x)
-        Qx_F[x] = (1/Tx)*(x+1)*(1-S(x+1)) # wrt F(x+1)
+        Qx_f[0] = (1/Tx)* (f(x-1)*S(x) - f(x)*S(x+1)) # wrt f(1)
+        Qx_f[x-2] = (1/Tx) * f(1)*S(x) # wrt f(x-1)
+        Qx_f[x-1] = -(1/Tx) * (x*(1 - S(x)) + f(1)*S(x+1)) # wrt f(x)
+        Qx_f[x] = (1/Tx)*(x+1)*(1-S(x+1)) # wrt f(x+1)
 
-        Jac[x-1,:] = Qx_F
+        Jac[x-1,:] = Qx_f
 
 
 
-    Qxmax_F = np.zeros(len(Fvec))
-    Qxmax_F[0] = (ξ/Tx)*F(x_max-1)*S(x_max,1)
-    Qxmax_F[x_max-2] = (ξ/Tx)*F(1)*S(x_max,1)  # wrt F(x-1)
-    Qxmax_F[x_max-1] = -(1/Tx)*x_max*S(1,x_max) 
-    Jac[-1,:] = Qxmax_F
+    Qxmax_f = np.zeros(len(fvec))
+    Qxmax_f[0] = (1/Tx)*f(x_max-1)*S(x_max,1)
+    Qxmax_f[x_max-2] = (1/Tx)*f(1)*S(x_max,1)  # wrt f(x-1)
+    Qxmax_f[x_max-1] = -(1/Tx)*x_max*S(1,x_max) 
+    Jac[-1,:] = Qxmax_f
                                            
     
     return Jac
@@ -162,42 +162,42 @@ def fun_grad_func_response(i,x, N1,N2,H1,H2,**params):
         return np.array([ - alpha1 * alpha2 * H1 * N2,
                          alpha2 * (1 + alpha1 * H1 * N1)])/denom
 
-def fun_grad_big_prey(N1,N2,Fvec, grad_Y_1, η1, A1, x_max, **params):
+def fun_grad_big_prey(N1,N2,fvec, grad_Y_1, η1, A1, x_max, **params):
     '''
-    return gradient of big prey vs n1, n2, F(1), .. F(x)
+    return gradient of big prey vs n1, n2, f(1), .. f(x)
     '''
     
-    # the sum of A_1 * F(x) * [ del Y_1/ del N_1, del Y_1 / del N_2]
-    grad_sum_F_y = A1 * np.sum(grad_Y_1 * Fvec,1)
+    # the sum of A_1 * f(x) * [ del Y_1/ del N_1, del Y_1 / del N_2]
+    grad_sum_f_y = A1 * np.sum(grad_Y_1 * fvec,1)
     
-    delU1_N1 = η1 * (1 - 2 *N1) - grad_sum_F_y[0] 
-    delU1_N2 = - grad_sum_F_y[1]
+    delU1_N1 = η1 * (1 - 2 *N1) - grad_sum_f_y[0] 
+    delU1_N2 = - grad_sum_f_y[1]
 
     xvec = np.arange(1,x_max+1,1)
     Y1_vec = fun_response_non_dim(xvec, N1, N2, 1,**params)
-    delU1_F = -A1 * Y1_vec
+    delU1_f = -A1 * Y1_vec
 
-    to_return = np.array([delU1_N1, delU1_N2, *delU1_F])
+    to_return = np.array([delU1_N1, delU1_N2, *delU1_f])
 
     return to_return
 
-def fun_grad_small_prey(N1,N2,Fvec, grad_Y_2, η2, A1, x_max, **params):
+def fun_grad_small_prey(N1,N2,fvec, grad_Y_2, η2, A1, x_max, **params):
     '''
-    return gradient of small prey vs n1, n2, F(1), .. F(x)
+    return gradient of small prey vs n1, n2, f(1), .. f(x)
     '''
     A2 = 1 - A1
 
-    # the sum of A_2 * F(x) * [ del Y_2/ del N_1, del Y_2 / del N_2]
-    grad_sum_F_y = A2 * np.sum(grad_Y_2 * Fvec,1)
+    # the sum of A_2 * f(x) * [ del Y_2/ del N_1, del Y_2 / del N_2]
+    grad_sum_f_y = A2 * np.sum(grad_Y_2 * fvec,1)
 
-    delU2_N1 = - grad_sum_F_y[0]
-    delU2_N2 = η2 * (1 - 2 * N2) - grad_sum_F_y[1]
+    delU2_N1 = - grad_sum_f_y[0]
+    delU2_N2 = η2 * (1 - 2 * N2) - grad_sum_f_y[1]
 
     xvec = np.arange(1,x_max+1,1)
     Y2_vec = fun_response_non_dim(xvec,N1,N2,2,**params)
-    delU2_F = -A2 * Y2_vec
+    delU2_f = -A2 * Y2_vec
 
-    to_return = np.array([delU2_N1, delU2_N2, *delU2_F])
+    to_return = np.array([delU2_N1, delU2_N2, *delU2_f])
 
     return to_return
 def fun_partial_S_wrt_prey(N1, N2, x, partial_π,x_max,

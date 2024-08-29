@@ -362,5 +362,5 @@ def mean_group_size_membership(f_of_x_vec, x_max, p):
             return np.nan
         else:
             ans_to_sum =numerator/p
-            return sum(vec_to_sum)
+            return sum(ans_to_sum)
         
