@@ -17,7 +17,7 @@ Pscaledlab = r'$P$,  Pred. Scaled Density'
 N1lab = r'$N_1$, Scaled Big Prey'+ '\nDensity'
 N2lab = r'$N_2$, Scaled Small Prey' + '\nDensity'
 Tlab = r'$T$, Scaled time'
-mean_x_lab = "Mean Group Size\n Membership"
+mean_x_lab = "Mean Experienced\nGroup Size"
 freq_x_lab = r'Freq$(x)$'
 β1lab = r'$\beta_1$'
 Fxlab = r'F$(x)$'
@@ -44,15 +44,15 @@ def get_results(out2,x_max):
     x_max: max group size
 
     @returns:
-    T, N1, N2, P, F_of_x_vec, mean_x
+    T, N1, N2, P, g_of_x_vec, mean_x
     '''
     N1, N2 = out2.y[0:2]
-    f_of_x_vec = out2.y[2:]
+    g_of_x_vec = out2.y[2:]
     xvec = np.arange(1,x_max+1,1)
-    p = np.sum(xvec*f_of_x_vec.T,1)
-    mean_x = mean_group_size_membership(f_of_x_vec.T, x_max, p)
+    p = np.sum(xvec*g_of_x_vec.T,1)
+    mean_x = mean_group_size_membership(g_of_x_vec.T, x_max, p)
     T = out2.t
-    return T, N1, N2, p, f_of_x_vec, mean_x
+    return T, N1, N2, p, g_of_x_vec, mean_x
 def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
     """
     add an arrow to a line.
@@ -122,39 +122,39 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500], ncol_legend = 1):
     '''
     T = out.t
     print(T[-1])
-    F_of_x_vec = out.y[2:]
+    g_of_x_vec = out.y[2:]
 
     xvec = np.arange(1,x_max+1,1)
-    xF = xvec*F_of_x_vec.T
+    xg = xvec*g_of_x_vec.T
 
-    p = np.sum(xF,1)
+    p = np.sum(xg,1)
     
     # find F_of_x that are big enough
-    portion_x = (xF.T/p).T
+    portion_x = (xg.T/p).T
 
     portion_x[p<1e-10] = np.nan
     
     xlist = []
-    xflist = []
+    xglist = []
     for x in range(1,x_max+1):
         portion_x_curr = portion_x[:,x-1]
         if max(portion_x_curr)>.1:
             xlist.append(x)
-            xflist.append(portion_x_curr)
+            xglist.append(portion_x_curr)
             
     labels = [f'x={x}' for x in xlist]
-    for i, portion_x_curr in enumerate(xflist):
+    for i, portion_x_curr in enumerate(xglist):
         ax.plot(T, portion_x_curr, label = labels[i], c = colors[i])
         
-    format_ax(ax,Tlab,r'$xf(x)/p$', xlim = xlim, ylim=None,
+    format_ax(ax,Tlab,r'$xg(x)/p$', xlim = xlim, ylim=None,
               fs_labs = 20, fs_legend = 16, if_legend = True, ncol_legend = ncol_legend)
     return fig, ax
 
-def print_param_caption(Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of_1, 
+def print_param_caption(Tx, η1, η2, A, β1, β2, H1, H2, α1_of_1, α2_of_1, 
                         s1, s2, α2_fun_type,**params):
     caption = 'The parameters are '
     caption += f'$\\eta_1 = {η1}, \\eta_2 = {η2}, '
-    caption += f'A_1 = {A1}, \\beta_1 = {β1}, \\beta_2 = {β2}, '
+    caption += f'A = {A}, \\beta_1 = {β1}, \\beta_2 = {β2}, '
     caption += f'H_1 = {H1}, H_2 = {H2}, T_x = {Tx}, ' 
     if α2_fun_type == 'constant':
         caption += f'\\alpha_1(1) = {α1_of_1}, s_1 ={s1}$, '
@@ -168,12 +168,12 @@ def print_param_caption(Tx, η1, η2, A1, β1, β2, H1, H2, α1_of_1, α2_of_1,
 
 
 
-def plot_F_equilibrium(paramvec, Fxvecs, xvec, xlab, ylab, 
+def plot_F_equilibrium(paramvec, gxvecs, xvec, xlab, ylab, 
                        ncol_legend = 1, xlim = None, ylim = None,
                        fig = None, ax = None):
     '''
     Plots distribution F(x)
-    can take for Fxvecs either F(x) or \bar{F}(x), the frequency of predators in groups of size x
+    can take for gxvecs either F(x) or \bar{F}(x), the frequency of predators in groups of size x
     '''
     if ax == None:
         fig, ax = plt.subplots(1,1)
@@ -183,12 +183,12 @@ def plot_F_equilibrium(paramvec, Fxvecs, xvec, xlab, ylab,
     colors_x = ['r', 'orange', 'magenta', 'purple', 'blue', 'cornflowerblue', 'k']
 
     xmax = len(xvec)
-    if Fxvecs.shape[1] == xmax:
-        Fxvecs = Fxvecs.T
+    if gxvecs.shape[1] == xmax:
+        gxvecs = gxvecs.T
         
     for x in xvec:
-        if np.any(Fxvecs[x-1]>1e-2):
-            ax.plot(paramvec, Fxvecs[x-1], colors_x[x-1], label = r'$x=$%d'%x)
+        if np.any(gxvecs[x-1]>1e-2):
+            ax.plot(paramvec, gxvecs[x-1], colors_x[x-1], label = r'$x=$%d'%x)
     format_ax(ax,xlab,ylab, fs_labs = 18, fs_legend = 16, if_legend = True,
              ncol_legend = ncol_legend)
     return fig, ax
@@ -200,22 +200,22 @@ def initiate_f_first_x(P0, x_f, x_max):
     F0 = F0/xvec
     return F0
     
-def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, p_0 = 20, F_of_x_vec = None):
+def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, p_0 = 20, g_of_x_vec = None):
     '''
     finds the equilibrium using Fsolve for the population dynamics and group dynamics system
-    if not given F_of_x_vec, then just has everyone initially solitary
+    if not given g_of_x_vec, then just has everyone initially solitary
     
     @returns:
     N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
     '''
     x_max = params['x_max']
     xvec = np.arange(1,x_max+1,1)
-    if not isinstance(F_of_x_vec, np.ndarray):
+    if not isinstance(g_of_x_vec, np.ndarray):
         print('hi')
         x_f = 2 if x_max > 2 else x_max
-        F_of_x_vec = initiate_f_first_x(p_0, x_f, x_max)
+        g_of_x_vec = initiate_f_first_x(p_0, x_f, x_max)
         
-    x0 = [N1_0, N2_0, *F_of_x_vec]
+    x0 = [N1_0, N2_0, *g_of_x_vec]
     out = root(fun = nullclines_no_P, x0 = x0, 
                                   args = (params))
     return out
@@ -234,10 +234,10 @@ def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8):
     x0 = [0.8, 0.7, *initiate_f_first_x(20, 2, x_max)]
     out2 = solve_ivp(full_model, [0, t_f], x0, method="LSODA",
                 args=(True,params))
-    T, N1, N2, p, F_of_x_vec, mean_x = get_results(out2, x_max)
+    T, N1, N2, p, g_of_x_vec, mean_x = get_results(out2, x_max)
 
     out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], 
-                          F_of_x_vec = F_of_x_vec[:,-1])
+                          g_of_x_vec = g_of_x_vec[:,-1])
     P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success =get_results_eq(out,x_max)
 
     # to be successful, sum x*F = P
@@ -260,6 +260,7 @@ def get_results_eq(out, x_max):
     success = True
     return P_eq, N1_eq, N2_eq, F_eq, mean_x_eq, success
 
+'''
 def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey, 
                                 α1_of_1 = 0.05, α2_of_1 = 0.95, s1 = 2, 
                                 s2 = 2, α2_fun_type = 'sigmoid', x_max = 10, 
@@ -275,11 +276,12 @@ def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey,
                   x_max = x_max, d = d,
                  Tx = Tx, r = 0, γ = 0, pop_process = True)
     return params
+'''
     
-def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
+def plot_freq_x_eq(paramvec, gxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
                        ncol_legend = 1, xlim = None, ylim = None,
                        fig = None, ax = None):
-    prob_x = (xvec*Fxvecs).T/Pvec
+    prob_x = (xvec*gxvecs).T/Pvec
     fig, ax = plot_F_equilibrium(paramvec, prob_x, xvec, xlab, ylab, 
                        ncol_legend = ncol_legend, xlim = None, ylim = None,
                        fig = None, ax = None)
@@ -288,13 +290,13 @@ def plot_freq_x_eq(paramvec, Fxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$',
 def abs_nullclines_no_P(initialstate, params):
     return np.sum(np.abs(nullclines_no_P(initialstate, params)))
 
-def plot_W_mode_comparison(xvec,N1vec,N2vec,Fxvecs, params, fig = None, ax = None):
+def plot_W_mode_comparison(xvec,N1vec,N2vec,gxvecs, params, fig = None, ax = None):
     '''
     Plots W(x) for the mode of x, and for x=1, and the mode of x + 1
     '''
     if fig == None:
         fig,ax = plt.subplots(1,1)
-    x_mode = np.argmax(xvec*Fxvecs,1)+1
+    x_mode = np.argmax(xvec*gxvecs,1)+1
     W_of_mode_x_plus_1 = per_capita_fitness_from_prey_non_dim(x_mode + 1, N1vec, N2vec, **params)
     W_of_mode_x = per_capita_fitness_from_prey_non_dim(x_mode, N1vec, N2vec, **params)
     W_of_1 = per_capita_fitness_from_prey_non_dim(1, N1vec, N2vec, **params)
@@ -313,12 +315,12 @@ def iterate_to_eq(initialstate, t_f, params):
                 args=(True,params))
 
     # extract results
-    T,N1,N2,P,Fxvec, mean_x = get_results(out2, params['x_max'])
-    full_trajectory = [T, N1, N2, P, Fxvec]
+    T,N1,N2,P,gxvec, mean_x = get_results(out2, params['x_max'])
+    full_trajectory = [T, N1, N2, P, gxvec]
     # get values at potential equilibrium
     
     N1,N2,P,mean_x = [ item[-1] for item in [N1,N2,P,mean_x]]
-    F = Fxvec[:,-1]
+    F = gxvec[:,-1]
     
     timederivatives = full_model(T[-1], [N1,N2,*F],True,params)
     
@@ -338,7 +340,7 @@ def get_equilibria_vary_param(paramvec, paramkey, **params):
 
     # set up empty vectors
     meanxvec = np.zeros(len(paramvec))
-    Fxvecs  = np.zeros((len(paramvec), x_max))
+    gxvecs  = np.zeros((len(paramvec), x_max))
     Pvec = meanxvec.copy()
     N1vec = meanxvec.copy()
     N2vec = meanxvec.copy()
@@ -371,7 +373,7 @@ def get_equilibria_vary_param(paramvec, paramkey, **params):
             
         success_vec[i] = success
         
-        Fxvecs[i,:] = F
+        gxvecs[i,:] = F
         Pvec[i] = P
         N1vec[i] = N1
         N2vec[i] = N2
@@ -394,4 +396,4 @@ def get_equilibria_vary_param(paramvec, paramkey, **params):
             else:
                 stability_vec[i] = 0
         
-    return Pvec, N1vec, N2vec, Fxvecs,meanxvec,success_vec, stability_vec
+    return Pvec, N1vec, N2vec, gxvecs,meanxvec,success_vec, stability_vec
