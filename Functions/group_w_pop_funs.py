@@ -14,7 +14,7 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
     if_groups_change = Bool, True --> preds can join/leave groups. 
                             False --> only birth/death affect group sizes
     params - is a dictionary of the parameters that must contain: 
-            β1, β2, A1, H1, H2, η1, η2, α1_of_1, α2_of_1, s1, s2, limited_portions, 
+            β1, β2, A, H1, H2, η1, η2, α1_of_1, α2_of_1, s1, s2, limited_portions, 
             Tx, d, r, γ, pop_process
     @ returns
     df_dT for x = 1, 2, ..., xmax
@@ -70,7 +70,7 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
             births1 = births_vec[x_max-1] - births_vec[0]
             dgdT = (Q_1 + births1 + deaths_vec[0])/Tx
         elif x == 2:
-            Q_2 = -g(2)*D(2) - g(2)*J(2) + 0.5*g(1)*J(1) + g(x3)*D(3)
+            Q_2 = -g(2)*D(2) - g(2)*J(2) + 0.5*g(1)*J(1) + g(3)*D(3)
             births2 = births_vec[0] - births_vec[1]
             dgdT = (Q_2 + births2 + deaths_vec[1])/Tx
         else:
@@ -120,7 +120,7 @@ def best_response_fun_given_fitness(x,y,fitnessvec, d):
     if W_max > 0:
         numerator = (W_of_x/W_max)**d
     else:
-        return 0
+        return 0.5
     denominator = 1 + (W_min/W_max)**d # this adjustment helps avoid dividing by zero from numpy rounding
     return numerator/denominator
     
@@ -161,7 +161,7 @@ def best_response_fun(x,y, N1,N2, d, **params):
     if W_max > 0:
         numerator = (W_of_x/W_max)**d
     else:
-        return 0
+        return 0.5
     denominator = 1 + (W_min/W_max)**d
 
     return W_of_x**d/(W_of_x**d + W_of_y**d)
