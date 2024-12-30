@@ -46,13 +46,13 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
     
     xvec = np.arange(1,x_max+1,1)
     # it \tau_x > 0make population matrix = birth matrix + death matrix
-    fitnessvec = fitness_from_prey_non_dim(xvec, N1, N2, **params)
+    fitnessvec = per_capita_fitness_from_prey_non_dim(xvec, N1, N2, **params) # fitness_from_prey_non_dim(xvec, N1, N2, **params)
     dgdT_vec = np.zeros(x_max)
 
     # births and deaths
     if params['pop_process']:
         η1 = params['η1']; η2 = params['η2']; tildeδ = 1 - η1 - η2
-        π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params)
+        π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params) #would fitnessvec*xvec also work...?
         births_vec = Tx*g_of_x_vec[:-1]* π_vec
         births_vec = np.append(births_vec,0) # so can calculate births at x_max
         deaths_vec = [fun_deaths(x) for x in range(1,x_max+1)]

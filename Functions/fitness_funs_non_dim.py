@@ -15,41 +15,6 @@ def fun_alpha2(x, α2_fun_type, α2_of_1, s2, **params):
         θ_2 = - np.log(1/α2_of_1 - 1)/(1-s2)
         return 1/(1 + np.exp(- θ_2 * (x - s2)))
 
-def fun_attack_rate(x, index, α1_of_1, α2_of_1, s1, s2, α2_fun_type,
-                    **params):
-    '''
-    RETIRING THIS BECAUSE IT'S CUMBERSOME...
-    
-    The attack rate as a function of x
-    
-    @inputs:
-    x: group size, 1,2,3,...
-    index: 1 or 2, indicates prey type 1 (big prey) or 2 (small prey)
-    α1_of_1: the attack rate of big prey for group size 1
-    α2_of_1: the attack rate of small prey for group size 1
-    s1: critical group size for big prey, must be >= 2
-    s2: critical group size for small prey, must be >= 2
-    
-    @returns:
-    attackrate (a float)
-
-    @example:
-    >> fun_attack_rate(1,2,0.05,0.95,2,2,**dict())
-    0.9500000000000001
-    >> fun_attack_rate(1,1,0.05,0.95,2,2,**dict())
-    0.05000000000000001
-    
-    '''
-    if index == 1:
-        θ_1 = - np.log(1/α1_of_1 - 1)/(1-s1)
-        return 1/(1 + np.exp(- θ_1 * (x - s1)))
-    elif index == 2:
-        if α2_fun_type == 'constant':
-            return α2_of_1
-        else:
-            θ_2 = - np.log(1/α2_of_1 - 1)/(1-s2)
-            return 1/(1 + np.exp(- θ_2 * (x - s2)))
-
 def fun_f1(x,N1,N2,**params):
     return fun_response_non_dim(x,N1,N2,1,**params)
 def fun_f2(x,N1,N2,**params):
@@ -83,7 +48,7 @@ def fun_response_non_dim(x, N1, N2, index, A, H1, H2, **params):
         numerator = α1*N1
     elif index == 2:
         numerator = α2*N2
-    denominator = 1 + α1*H1*N1 + α2*H2*N2
+    denominator = 1 + α1*H1*N1/x + α2*H2*N2/x
     return A*numerator/denominator
 def yield_from_prey_non_dim(x,N1,N2,β1, β2, **params):
     '''
@@ -135,3 +100,37 @@ def fitness_from_prey_non_dim(x, N1, N2, r, γ,**params):
         repro_exchange = np.ones(np.shape(x))
         repro_exchange[x>1] = (1-γ)*(1-r) + r*x[x>1]
         return  w_per_capita * repro_exchange
+def fun_attack_rate(x, index, α1_of_1, α2_of_1, s1, s2, α2_fun_type,
+                    **params):
+    '''
+    RETIRING THIS BECAUSE IT'S CUMBERSOME...
+    
+    The attack rate as a function of x
+    
+    @inputs:
+    x: group size, 1,2,3,...
+    index: 1 or 2, indicates prey type 1 (big prey) or 2 (small prey)
+    α1_of_1: the attack rate of big prey for group size 1
+    α2_of_1: the attack rate of small prey for group size 1
+    s1: critical group size for big prey, must be >= 2
+    s2: critical group size for small prey, must be >= 2
+    
+    @returns:
+    attackrate (a float)
+
+    @example:
+    >> fun_attack_rate(1,2,0.05,0.95,2,2,**dict())
+    0.9500000000000001
+    >> fun_attack_rate(1,1,0.05,0.95,2,2,**dict())
+    0.05000000000000001
+    
+    '''
+    if index == 1:
+        θ_1 = - np.log(1/α1_of_1 - 1)/(1-s1)
+        return 1/(1 + np.exp(- θ_1 * (x - s1)))
+    elif index == 2:
+        if α2_fun_type == 'constant':
+            return α2_of_1
+        else:
+            θ_2 = - np.log(1/α2_of_1 - 1)/(1-s2)
+            return 1/(1 + np.exp(- θ_2 * (x - s2)))
