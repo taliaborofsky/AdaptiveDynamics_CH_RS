@@ -235,52 +235,8 @@ def full_model(T, initialstate, arg, params):
 
     return [dN1dT, dN2dT, *dgdT_vec]
 
-def nullclines_no_P(initialstate, params):
-    '''
-    returns the nullclines for N1, N2, g(1), g(2), ..., g(x_max)
-    such that N1, N2 \neq 0
-    @inputs
-    initialstate = [N1, N2, g(1), ..., g(x_max)], type ndarray
-    params = dictionary of params
-    '''
-    N1 = initialstate[0]
-    N2 = initialstate[1]
-    g_of_x_vec = initialstate[2:]
-
-    x_max = params['x_max']
-    xvec = np.arange(1,x_max+1,1)
-
-
-    
     
 
-    N1_null, N2_null = N_nullclines(N1, N2, g_of_x_vec, xvec, **params)
-    dgdT_vec = group_formation_model_non_dim(0, g_of_x_vec,N1,N2, params) # I put 0 for T
-    
-    return [N1_null, N2_null, *dgdT_vec]
-
-def N_nullclines(N1, N2, g_of_x_vec, xvec, η1, η2, A, H1, H2, **params):
-    '''
-    dN1dT, dN2dT, the change in prey pop size versus time, non-dim'ed, divided by N_i
-    @inputs:
-    N1, N2 - non-dim'ed pred, big prey, and small prey pop sizes
-    g_of_x_vec - array of g(1), g(2), ... , g(x_max)
-    params - dic of params: must at least include H1, H2, α1_of_1, α2_of_1, s1, s2,
-    '''
-
-    α1 = fun_alpha1(xvec,**params) 
-    α2 = fun_alpha2(xvec,**params) 
-
-    # prey nonzero nullclines
-    Y1_no_N = α1/(1 + H1*α1*N1 + H2*α2*N2)
-    Y2_no_N = α2/(1 + H1*α1*N1 + H2*α2*N2)
-
-    N1_null = η1 * (1-N1) - A * np.sum(g_of_x_vec * Y1_no_N)
-    N2_null = η2 * (1-N2) - A * np.sum(g_of_x_vec * Y2_no_N)
-    
-    return N1_null, N2_null
-    
-    
 def fun_dPdT_non_dim(P, N1, N2, g_of_x_vec, η1, η2, β1, β2, **params):
     '''
     the equation for dPdT, the change in predator population size versus time, 

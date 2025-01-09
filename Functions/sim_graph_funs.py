@@ -193,35 +193,10 @@ def plot_F_equilibrium(paramvec, gxvecs, xvec, xlab, ylab,
              ncol_legend = ncol_legend)
     return fig, ax
     
-def initiate_f_first_x(P0, x_f, x_max):
-    xvec = np.arange(1,x_max+1,1)
-    F0 = np.zeros(x_max)
-    F0[0:x_f] = (P0/x_f)
-    F0 = F0/xvec
-    return F0
 
 
 
 
-def get_results_eq(out, x_max, tol = 1e-8):
-    xvec = np.arange(1,x_max+1,1)
-    g_eq = out.x[2:]
-    P_eq = np.sum(xvec*g_eq); 
-    N1_eq = out.x[0]
-    N2_eq = out.x[1]
-    mean_x_eq = mean_group_size_membership(g_eq,x_max,P_eq)
-    # check not negative
-    condition_failed_1 = np.any(np.array([P_eq, N1_eq, N2_eq, *g_eq, mean_x_eq])<0)
-    # check root reached the end
-    condition_failed_2 = out.success == False
-    # check sum x*g(x) = p
-    condition_failed_3 = np.abs(np.sum(np.arange(1,x_max+1,1)*g_eq) - P_eq) > tol
-    
-    if np.any([condition_failed_1, condition_failed_2, condition_failed_3]):
-        success = False
-        return np.nan, np.nan, np.nan, np.nan, np.nan, success
-    success = True
-    return P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success
 
 '''
 def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey, 
