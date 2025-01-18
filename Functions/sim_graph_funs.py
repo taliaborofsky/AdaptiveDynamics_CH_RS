@@ -82,7 +82,6 @@ def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
         end_ind = start_ind + 1
     else:
         end_ind = start_ind - 1
-
     line.axes.annotate('',
         xytext=(xdata[start_ind], ydata[start_ind]),
         xy=(xdata[end_ind], ydata[end_ind]),

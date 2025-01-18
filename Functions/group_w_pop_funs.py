@@ -1,7 +1,7 @@
 import numpy as np
 import scipy as sp
 from fitness_funs_non_dim import *
-
+from scipy.integrate import solve_ivp
 
 def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
     '''
@@ -23,6 +23,9 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
     d = params['d']; 
     g_of_x_vec = np.append(g_of_x_vec,0) # so can find dgdT at x = x_max
 
+    # fix negative values (solve_ivp can overshoot if step sizes too big)
+    g_of_x_vec[g_of_x_vec<0] = 0
+    
     def g(x):
         return g_of_x_vec[x-1]
     def S(x,y):
@@ -80,7 +83,8 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
             dgdT = (Q_x + birthsx + deaths_vec[x-1])/Tx
         
         dgdT_vec[x-1] = dgdT
-        
+
+
     return dgdT_vec
     
 
@@ -167,18 +171,6 @@ def best_response_fun(x,y, N1,N2, d, **params):
     return W_of_x**d/(W_of_x**d + W_of_y**d)
 
     
-def check_at_equilibrium(final_distribution, P, N1, N2,**params):
-    '''
-    check dg(x)/dT \approx 0
-    @ returns: array dgdT_, and 1 if at equilibrium or 0 if not
-    '''
-    T = 1 # this doesn't matter
-    dgdT_ = group_formation_model_non_dim(T, final_distribution,N1,N2, params)
-    not_at_equilibrium = np.abs(dgdT_) > 1e-8
-    if sum(not_at_equilibrium) > 0: # at least one dg(x)/dt is not zero
-        return dgdT_, 0 # 0 means not at equilibrium
-    else:
-        return dgdT_, 1 # 1 means not at equilibrium
 
 def model_one_x(T, initialstate, x, params):
     '''
@@ -200,6 +192,9 @@ def model_one_x(T, initialstate, x, params):
 
 
 
+
+
+
 def full_model(T, initialstate, arg, params):
     '''
     removed P!
@@ -216,7 +211,10 @@ def full_model(T, initialstate, arg, params):
     initialstate = np.array(initialstate)
 
     # this helps for numpy issues
-    initialstate[np.abs(initialstate)<1e-11] = 0
+    # initialstate[np.abs(initialstate)<1e-11] = 0
+
+    #solve_ivp can overshoot, so anywhere that's negative really should be 0
+    # initialstate[initialstate<0] = 0
     
     N1,N2 = initialstate[0:2]
     g_of_x_vec = initialstate[2:]
@@ -303,17 +301,67 @@ def mean_group_size_membership(g_of_x_vec, x_max, p):
     x_vec = np.arange(1,x_max+1,1)
     numerator = x_vec*(g_of_x_vec*x_vec)
     if isinstance(p, np.ndarray):
-        mask = p > 1e-10
+        mask = (p > 1e-10) & (np.all(g_of_x_vec.T>0, axis = 0))
         numerator = numerator.sum(1)
         ans = p.copy()
         ans[mask] = numerator[mask]/p[mask]
-        ans[~mask] = np.nan
+        ans[~mask] = np.ones(ans[~mask].shape)
         return ans
         
     else:
-        if p < 1e-10:
-            return np.nan
+        if p < 1e-10 and np.all(np.array(g_of_x_vec)>0):
+            return 1
         else:
             ans_to_sum =numerator/p
             return sum(ans_to_sum)
+
+ 
+def bounded_ivp(y0,params, t_f = 1000):
+    '''
+    NOTE: does not work for y0 = 0!!!!
+    
+    runs the ivp with a transformation of 
+    (for y representing all the state variables)
+    y --> u: y = a * exp (b * u). then  du/dt = dy/dt/(b*y)
+    i choose a = b = 1 because it's easy
+    ''' 
+    y0 = np.array(y0)
+    if np.any(y0) == 0:
+        print("Bounded ivp does not work here\
+        because the input contains a zero")
+        return(0)
+    
+    a = 1; b = 1
+    u0 = (1/b)*np.log(y0/a)
+    out = solve_ivp(transformed_model, [0, t_f], y0 = u0,
+                   method = "LSODA", args = (True, params)
+                  )
+    u_trajectory = out.y
+    T = out.t
+    y_trajectory = a*np.exp(b*u_trajectory)
+
+    # extract results
+    x_max = params['x_max']
+    N1, N2 = y_trajectory[0:2]
+    g_of_x_vec = y_trajectory[2:]
+    xvec = np.arange(1,x_max+1,1)
+    p = np.sum(xvec*g_of_x_vec.T,1)
+    mean_x = mean_group_size_membership(g_of_x_vec.T, x_max, p)
+    
+    return T, N1, N2, p, g_of_x_vec, mean_x
+
+
+    
+def transformed_model(T, u0, arg, params):
+    #For issue where need solve_ivp to keep some variable y s.t y > 0.
+    # Soln from stack exchange: 
+    # Alternatively, replace the density with y=a*exp(b*u) with sensibly chosen values for a and b, 
+    # then du/dt = dy/dt/(b*y). 
+    # Then g cannot become negative
+    a = 1; b = 1
+    y0 = a * np.exp(b*u0)
+    y_ = full_model(T,y0, arg, params)
+    y_ = np.array(y_)
+    u_ = y_/(b*y0)
+    return u_
         

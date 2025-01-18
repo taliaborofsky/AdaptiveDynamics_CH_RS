@@ -30,13 +30,13 @@ def fun_grad_func_response(i,x, N1,N2,H1,H2,A, **params):
     '''
     alpha1 = fun_alpha1(x,**params)
     alpha2 = fun_alpha2(x,**params)
-    denom = (1 + alpha1 * H1 * N1 + alpha2 * H2 * N2)**2
+    denom = (1 + alpha1 * H1 * N1/x + alpha2 * H2 * N2/x)**2
     if i == 1:
-        return A*np.array([ alpha1*(1 + alpha2 * H2 * N2), 
-                         - alpha1 * alpha2 * H2 * N1])/denom
+        return A*np.array([ alpha1*(1 + alpha2 * H2 * N2/x), 
+                         - alpha1 * alpha2 * H2 * N1/x])/denom
     elif i == 2:
-        return A*np.array([ - alpha1 * alpha2 * H1 * N2,
-                         alpha2 * (1 + alpha1 * H1 * N1)])/denom
+        return A*np.array([ - alpha1 * alpha2 * H1 * N2/x,
+                         alpha2 * (1 + alpha1 * H1 * N1/x)])/denom
 
 def fun_grad_big_prey(N1,N2,gvec, grad_f_1, η1, x_max, **params):
     '''
@@ -187,6 +187,7 @@ def fun_partial_S_wrt_prey(N1, N2, x, π_vec, fitnessvec, partial_π,
                                    - partial_π_of_x * 1 / π_of_x)
     
     return partial_S_1_x
+    
 def fun_Jac_groups_nopop(N1, N2, gvec, x_max, Tx, d, **params):
     '''
     Finds the Jacobian for group dynamics with no populatin dynamics
@@ -265,31 +266,31 @@ def classify_stability(J):
     else:
         return "Indeterminate stability (needs further analysis)"
 
-def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, A1, β1, β2, **params):
-    H1 = params['H1']
-    H2=params['H2']
-    Y1 = fun_Y1(N1,N2,x,**params)
-    Y2 = fun_Y2(N1,N2,x,**params)
-    α2 = fun_alpha2(x, **params)
-    α1 = fun_alpha1(x, **params)
-    td = 1 - η1 - η2
-    A2 = 1 - A1
+# def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, A1, β1, β2, **params):
+#     H1 = params['H1']
+#     H2=params['H2']
+#     Y1 = fun_Y1(N1,N2,x,**params)
+#     Y2 = fun_Y2(N1,N2,x,**params)
+#     α2 = fun_alpha2(x, **params)
+#     α1 = fun_alpha1(x, **params)
+#     td = 1 - η1 - η2
+#     A2 = 1 - A1
     
-    J = np.zeros((3, 3))
+#     J = np.zeros((3, 3))
 
-    J[0, 0] = -td + (1/x) * (β1 * Y1 + β2 * Y2)
-    J[0, 1] = P / x * β1 * (α1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
-    J[0, 2] = P / x * β2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+#     J[0, 0] = -td + (1/x) * (β1 * Y1 + β2 * Y2)
+#     J[0, 1] = P / x * β1 * (α1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+#     J[0, 2] = P / x * β2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
     
     
-    J[1, 0] = -A1 * Y1 / x
-    J[1, 1] = η1 * (1 - 2 * N1) - P / x * A1 * (α1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
-    J[1, 2] = -P / x * A1 * (α1 * α2 * H2 * N2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+#     J[1, 0] = -A1 * Y1 / x
+#     J[1, 1] = η1 * (1 - 2 * N1) - P / x * A1 * (α1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+#     J[1, 2] = -P / x * A1 * (α1 * α2 * H2 * N2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
     
     
-    J[2, 0] = -A2 * Y2 / x
-    J[2, 1] = -P / x * A2 * (α2 * α1 * H1 * N1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
-    J[2, 2] = η2 * (1 - 2 * N2) - P / x * A2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+#     J[2, 0] = -A2 * Y2 / x
+#     J[2, 1] = -P / x * A2 * (α2 * α1 * H1 * N1 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
+#     J[2, 2] = η2 * (1 - 2 * N2) - P / x * A2 * (α2 / (1 + H1 * α1 * N1 + H2 * α2 * N2)**2)
     
-    return J
+#     return J
 

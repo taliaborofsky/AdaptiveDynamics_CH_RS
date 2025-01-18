@@ -5,6 +5,10 @@ from group_w_pop_funs import *
 from scipy.integrate import solve_ivp
 from scipy.optimize import root
 from local_stability_funs import *
+from sim_graph_funs import *
+
+
+
 
 def find_mangel_clark(N1, N2, x_max, **params):
     # mangel and clark predicted that groups should grow until W(x^*) = W(1)
@@ -18,149 +22,54 @@ def find_mangel_clark(N1, N2, x_max, **params):
             return x - 1
     return x # if reach x_max
 
-    
-    
-def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8):
-    '''
-    iterates from p = 3, N1 = 0.8, N2 = 0.7, 
-    predators split evenly between groups of 1, 2, or 3
-    then uses root to find equilibrium
-
-    @returns
-    P,N1,N2,g,mean_x at equilibrium, 
-    and success (Boolean; true if the equilibria values are all nonnegative)
-    '''
-    x_max = params['x_max']
-    x0 = [0.8, 0.7, *initiate_f_first_x(20, 2, x_max)]
-    out2 = solve_ivp(full_model, [0, t_f], x0, method="LSODA",
-                args=(True,params))
-    T, N1, N2, p, g_of_x_vec, mean_x = get_results(out2, x_max)
-
-    out = get_equilibrium(params, N1_0 = N1[-1], N2_0 = N2[-1], 
-                          g_of_x_vec = g_of_x_vec[:,-1])
-    P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success =get_results_eq(out,x_max)
-
-    # to be successful, sum x*g = P
-    # sum_x_g = np.sum(np.arange(1,x_max+1,1)*g_eq)
-    # success = success and (np.abs(sum_x_g - P_eq )< tol)
-    
-    return P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success
 
 def iterate_to_eq(initialstate, t_f, params):
     '''
     try to iterate to eq in t_f time steps
+    return curr (the final point after iterations), success, timederivatives 
     '''
-    out2 = solve_ivp(full_model, [0, t_f], initialstate, method="LSODA",
-                args=(True,params))
-
+    out2 = bounded_ivp(initialstate, params, t_f = t_f) 
+    T, N1, N2, P, g_of_x_vec, mean_x = out2
+    
     # extract results
-    T,N1,N2,P,gxvec, mean_x = get_results(out2, params['x_max'])
-    full_trajectory = [T, N1, N2, P, gxvec]
-    # get values at potential equilibrium
-    
-    N1,N2,P,mean_x = [ item[-1] for item in [N1,N2,P,mean_x]]
-    g = gxvec[:,-1]
-    
-    timederivatives = full_model(T[-1], [N1,N2,*g],True,params)
-    
-    success = np.all(np.abs(np.array(timederivatives)) < 1e-9)
-    
-    
-    return np.array([P, N1, N2, *g]), success, mean_x, timederivatives, full_trajectory
-    
-def get_equilibria_vary_param(paramvec, paramkey, **params):
-    '''
-    Get a list of equilibrium values corresponding to the parameters
-    '''
+    traj = [N1,N2,*g_of_x_vec]
+    curr = [item[-1] for item in traj]
+    [N1,N2,*g_eq] = curr
 
-
-    x_max = params['x_max']
-    xvec = np.arange(1,x_max+1,1)
-
-    # set up empty vectors
-    meanxvec = np.zeros(len(paramvec))
-    gxvecs  = np.zeros((len(paramvec), x_max))
-    Pvec = meanxvec.copy()
-    N1vec = meanxvec.copy()
-    N2vec = meanxvec.copy()
-    success_vec = meanxvec.copy()
-    stability_vec = meanxvec.copy()
+    # check if at equilibrium
     
-    for i, param in enumerate(paramvec):
-        params = params.copy()
-        params[paramkey] = param
+    success, timederivatives = check_at_equilibrium2(
+        curr[0], curr[1], curr[2:], params
+    )
 
-        # try to iterate a little and then use root to solve for equilibrium
-        out_eq = iterate_and_solve_equilibrium(params, t_f = 5)
-        P, N1, N2, g, mean_x, success = out_eq
-        
-        if success==False:
-            
-            # try to get to equilibrium in just 200 steps #
-            
-            t_f = 500
-            initialstate = [0.5,0.4, 20, *np.zeros(x_max-1)]
-            finalpoint, success, mean_x, _, _ = iterate_to_eq(initialstate, t_f,
-                                                                         params)
-            [P,N1,N2,*g] = finalpoint
-
-            # if that doesn't work, try solving from here
-            if success == False:
-                out = get_equilibrium(params, N1_0 = N1, N2_0 = N2, 
-                          g_of_x_vec = g)
-                P, N1, N2, g, mean_x, success =get_results_eq(out,x_max)
-            # if that doesn't work, now do another 2000 steps
-            if success == False:
-                out = iterate_to_eq(finalpoint[1:], 5000,params)   
-                finalpoint, success, mean_x, _, _ = out
-            
-                [P,N1,N2,*g] = finalpoint
-            if success == False:
-                out = get_equilibrium(params, N1_0 = N1, N2_0 = N2, 
-                          g_of_x_vec = g)
-                P, N1, N2, g, mean_x, success =get_results_eq(out,x_max)
-            
-        success_vec[i] = success
-        
-        gxvecs[i,:] = g
-        Pvec[i] = P
-        N1vec[i] = N1
-        N2vec[i] = N2
-        meanxvec[i] = mean_x
-
-
-        # check stability
-        try:
-            if np.any(np.isnan(np.array([P,N1,N2,*g]))):
-                stability_vec[i] = np.nan
-        except TypeError:
-            stability_vec[i] = np.nan
-        else:
-            J = fun_Jac(N1,N2,np.array(g),**params)
-            stability = classify_stability(J)
-            if stability == "Stable (attractive)":
-                stability_vec[i] = 1
-            elif stability == "Unstable":
-                stability_vec[i] = -1
-            else:
-                stability_vec[i] = 0
-        
-    return Pvec, N1vec, N2vec, gxvecs,meanxvec,success_vec, stability_vec
+    # get mean experienced
+    x_max = params["x_max"]
+    P_eq = P[-1]; 
     
-def get_equilibrium(params, N1_0 = 0.5, N2_0 = 0.4, p_0 = 20, g_of_x_vec = None):
+    mean_x_eq = mean_group_size_membership(g_eq,x_max,P_eq)
+
+    curr.append(mean_x_eq)
+
+    if not np.isfinite(curr).all():
+        success = False
+    
+    
+    return curr, success, timederivatives 
+   
+def get_equilibrium(params,N1_0,N2_0,g_of_x_vec):#, N1_0 = 0.5, N2_0 = 0.4, p_0 = 20, g_of_x_vec = None):
     '''
     finds the equilibrium s.t. N1, N2 > 0 using root for the population dynamics and group dynamics system
-    if not given g_of_x_vec, then just has everyone initially solitary
+    RETIRED: if not given g_of_x_vec, then just has everyone initially solitary
     
     @returns:
     N1_eq, N2_eq, F_eq, P_eq, mean_x_eq
     '''
     x_max = params['x_max']
     xvec = np.arange(1,x_max+1,1)
-    if not isinstance(g_of_x_vec, np.ndarray):
-        #print('hi')
-        x_f = 2 if x_max > 2 else x_max
-        g_of_x_vec = initiate_f_first_x(p_0, x_f, x_max)
+    # if not isinstance(g_of_x_vec, np.ndarray):
+    #     #print('hi')
+    #     x_f = 2 if x_max > 2 else x_max
+    #     g_of_x_vec = initiate_f_first_x(p_0, x_f, x_max)
         
     x0 = [N1_0, N2_0, *g_of_x_vec]
     out = root(fun = nullclines_no_P, x0 = x0, 
@@ -245,8 +154,9 @@ def N_nullclines(N1, N2, g_of_x_vec, xvec, η1, η2, A, H1, H2, **params):
     α2 = fun_alpha2(xvec,**params) 
 
     # prey nonzero nullclines
-    Y1_no_N = α1/(1 + H1*α1*N1 + H2*α2*N2)
-    Y2_no_N = α2/(1 + H1*α1*N1 + H2*α2*N2)
+    denominator = 1 + H1*α1*N1/xvec + H2*α2*N2/xvec
+    Y1_no_N = α1/denominator
+    Y2_no_N = α2/denominator
 
     N1_null = η1 * (1-N1) - A * np.sum(g_of_x_vec * Y1_no_N)
     N2_null = η2 * (1-N2) - A * np.sum(g_of_x_vec * Y2_no_N)
@@ -276,14 +186,33 @@ def get_equilibrium_prey_i_extinct(params, i, Nj_0 = 0.4,
     elif i == 2:
         out = root(fun = nullclines_small_prey_extinct, x0 = x0, args = (params))
     return out  
-def initiate_f_first_x(P0, x_f, x_max):
-    xvec = np.arange(1,x_max+1,1)
-    F0 = np.zeros(x_max)
-    F0[0:x_f] = (P0/x_f)
-    F0 = F0/xvec
-    return F0
 
+
+def check_at_equilibrium2(N1,N2,g_of_x_vec, params):
+    # check not negative
+    curr = [N1, N2, *g_of_x_vec]
+    condition_failed_1 = np.any(
+        np.array(curr)<0
+    )
+    deriv_vec = full_model(
+        0, curr, True, params
+    )
+    condition_failed_2 = np.any(np.abs(deriv_vec)>1e-8)
+    if np.any([condition_failed_1, condition_failed_2]):#, condition_failed_3]):
+        success = False
+    else:
+        success = True
+    return success, deriv_vec
+    # check derivative is zero
+    # check sum x*g(x) = p
 def get_results_eq(out, x_max, tol = 1e-8, which_prey_extinct = -1):
+    '''
+    Extracts the state variables at the equilibrium, calculates 
+    mean experienced group size, and checks that the equilibrium 
+    is valid (within the state variable domains)
+
+    @ returns: P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success
+    '''
     xvec = np.arange(1,x_max+1,1)
     if which_prey_extinct == -1:
         g_eq = out.x[2:]
@@ -305,10 +234,148 @@ def get_results_eq(out, x_max, tol = 1e-8, which_prey_extinct = -1):
     # check root reached the end
     condition_failed_2 = out.success == False
     # check sum x*g(x) = p
-    condition_failed_3 = np.abs(np.sum(np.arange(1,x_max+1,1)*g_eq) - P_eq) > tol
+    #condition_failed_3 = np.abs(np.sum(np.arange(1,x_max+1,1)*g_eq) - P_eq) > tol
     
-    if np.any([condition_failed_1, condition_failed_2, condition_failed_3]):
+    if np.any([condition_failed_1, condition_failed_2]):#, condition_failed_3]):
         success = False
         return np.nan, np.nan, np.nan, np.nan, np.nan, success
     success = True
     return P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success
+
+def initiate_g_first_x(x_f, x_max):
+    
+    g0 = np.zeros(x_max) + 1e-4
+    g0[0:x_f] = 1
+    return g0
+
+def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8):
+    '''
+    iterates from a standard start point that tends to work
+    then uses root to find equilibrium
+
+    @returns
+    [N1,N2,*g, mean_x], success (BOOL for whether at equilibrium), 
+    and a vector of the time derivatives
+    '''
+    x_max = params['x_max']
+    x_f = 3 if x_max >=3 else 2
+    y0 = [0.71, 0.7, *initiate_g_first_x(3, x_max)]
+    out2 = bounded_ivp(y0, params, t_f = t_f) 
+    T, N1, N2, P, g_of_x_vec, mean_x = out2
+
+    # extract new starting point
+    traj = [N1,N2,*g_of_x_vec]
+    curr = [item[-1] for item in traj]
+    print(curr)
+
+    out = get_equilibrium(params, N1_0 = curr[0], N2_0 = curr[1], 
+                          g_of_x_vec = curr[2:])
+    P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success =get_results_eq(out,x_max)
+
+    # to be successful, sum x*g = P
+    # sum_x_g = np.sum(np.arange(1,x_max+1,1)*g_eq)
+    # success = success and (np.abs(sum_x_g - P_eq )< tol)
+    
+    return P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success
+    
+######################################################################
+
+# check and update functions below, if still needed
+
+    
+def get_equilibria_vary_param(paramvec, paramkey, **params):
+    '''
+    Get a list of equilibrium values corresponding to the parameters
+    '''
+
+
+    x_max = params['x_max']
+    xvec = np.arange(1,x_max+1,1)
+
+    # set up empty vectors
+    meanxvec = np.zeros(len(paramvec))
+    gxvecs  = np.zeros((len(paramvec), x_max))
+    Pvec = meanxvec.copy()
+    N1vec = meanxvec.copy()
+    N2vec = meanxvec.copy()
+    success_vec = meanxvec.copy()
+    stability_vec = meanxvec.copy()
+    
+    for i, param in enumerate(paramvec):
+        params = params.copy()
+        params[paramkey] = param
+
+        # try to iterate a little and then use root to solve for equilibrium
+        out_eq = iterate_and_solve_equilibrium(params, t_f = 5)
+        P, N1, N2, g, mean_x, success = out_eq
+        
+        if success==False:
+            
+            # try to get to equilibrium in just 200 steps #
+            
+            t_f = 500
+            initialstate = [0.5,0.4, 20, *np.zeros(x_max-1)]
+            finalpoint, success, mean_x, _, _ = iterate_to_eq(initialstate, t_f,
+                                                                         params)
+            [P,N1,N2,*g] = finalpoint
+
+            # if that doesn't work, try solving from here
+            if success == False:
+                out = get_equilibrium(params, N1_0 = N1, N2_0 = N2, 
+                          g_of_x_vec = g)
+                P, N1, N2, g, mean_x, success =get_results_eq(out,x_max)
+            # if that doesn't work, now do another 2000 steps
+            if success == False:
+                out = iterate_to_eq(finalpoint[1:], 5000,params)   
+                finalpoint, success, mean_x, _, _ = out
+            
+                [P,N1,N2,*g] = finalpoint
+            if success == False:
+                out = get_equilibrium(params, N1_0 = N1, N2_0 = N2, 
+                          g_of_x_vec = g)
+                P, N1, N2, g, mean_x, success =get_results_eq(out,x_max)
+            
+        success_vec[i] = success
+        
+        gxvecs[i,:] = g
+        Pvec[i] = P
+        N1vec[i] = N1
+        N2vec[i] = N2
+        meanxvec[i] = mean_x
+
+
+        # check stability
+        try:
+            if np.any(np.isnan(np.array([P,N1,N2,*g]))):
+                stability_vec[i] = np.nan
+        except TypeError:
+            stability_vec[i] = np.nan
+        else:
+            J = fun_Jac(N1,N2,np.array(g),**params)
+            stability = classify_stability(J)
+            if stability == "Stable (attractive)":
+                stability_vec[i] = 1
+            elif stability == "Unstable":
+                stability_vec[i] = -1
+            else:
+                stability_vec[i] = 0
+        
+    return Pvec, N1vec, N2vec, gxvecs,meanxvec,success_vec, stability_vec
+ 
+
+''' 
+retired i think
+def check_at_equilibrium(final_distribution, P, N1, N2,**params):
+    
+    # check dg(x)/dT \approx 0
+    # @ returns: array dgdT_, and 1 if at equilibrium or 0 if not
+    
+    T = 1 # this doesn't matter
+    dgdT_ = group_formation_model_non_dim(T, final_distribution,N1,N2, params)
+    not_at_equilibrium = np.abs(dgdT_) > 1e-8
+    if sum(not_at_equilibrium) > 0: # at least one dg(x)/dt is not zero
+        return dgdT_, 0 # 0 means not at equilibrium
+    else:
+        return dgdT_, 1 # 1 means not at equilibrium
+
+'''
