@@ -266,6 +266,25 @@ def classify_stability(J):
     else:
         return "Indeterminate stability (needs further analysis)"
 
+def classify_equilibrium(equilibrium, params):
+    '''
+    equilibrium = [N1, N2, *gvec]
+    @ returns: stability (string)
+
+    Note: stability is one of:
+    "Stable (attractive)", "Unstable", 
+    "Marginally stable (needs further analysis)",
+    or "Indeterminate stability (needs further analysis)"
+    '''
+    [N1,N2,*gvec] = equilibrium
+    J = fun_Jac(N1,N2,gvec,**params) 
+    if not np.isfinite(J).all():
+        print(J)
+        print(equilibrium)
+        print(params)
+    stability = classify_stability(J)
+    
+    return stability
 # def fun_jacobian_one_grp(P, N1, N2, x, η1, η2, A1, β1, β2, **params):
 #     H1 = params['H1']
 #     H2=params['H2']

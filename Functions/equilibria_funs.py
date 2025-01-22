@@ -75,7 +75,30 @@ def get_equilibrium(params,N1_0,N2_0,g_of_x_vec):#, N1_0 = 0.5, N2_0 = 0.4, p_0 
     out = root(fun = nullclines_no_P, x0 = x0, 
                                   args = (params))
     return out
+def get_equilibria_from_init_pts(initial_points, tol_unique=1e-8, **params):
+    '''
+    iterate through the initial points 
+    and see if can use root to find equilibria
 
+    This finds coexistence equilibria!!
+    '''
+    x_max = params['x_max']
+    #curr_eq = np.zeros(2+x_max) #N1 = 0, N2 = 0, g(x) = 0
+    results = []
+    for i, point in enumerate(initial_points):
+        out = get_equilibrium(params, N1_0 = point[0], N2_0 = point[1], g_of_x_vec = point[2:])
+
+        # get the equilibrium values from the output
+        sol = get_results_eq(out, x_max, tol = 1e-8)
+        P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success = sol 
+        
+        if success: # the root finder found an equilibrium and it's "valid" (N1, N2, g(x) are in their ranges)
+            new_eq = np.array([N1_eq, N2_eq, *g_eq, mean_x_eq])
+            results.append(new_eq)
+            #results = check_unique(results, new_eq, tol_unique)
+    return results
+
+    
 def abs_nullclines_no_P(initialstate, params):
     return np.sum(np.abs(nullclines_no_P(initialstate, params)))
 

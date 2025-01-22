@@ -7,11 +7,13 @@ from scipy.optimize import root
 from local_stability_funs import *
 from equilibria_funs import *
 
+
 #colors = ['k','r','b','cyan', 'magenta','orange',
 #         'gray', 'green']
 colors = ['r', 'orange', 'magenta', 'purple', 'blue', 
           'cornflowerblue', 'turquoise','k', 'gray']
-markers = ["o","","v", ""]
+colors_x = ['k', 'b', 'r', 'm']
+#markers = ["o","","v", ""]
 Plab = r'$p$,  Pred. Pop Density'
 Pscaledlab = r'$P$,  Pred. Scaled Density'
 N1lab = r'$N_1$, Scaled Big Prey'+ '\nDensity'
@@ -21,11 +23,59 @@ mean_x_lab = "Mean Experienced\nGroup Size"
 freq_x_lab = r'Freq$(x)$'
 β1lab = r'$\beta_1$'
 gxlab = r'g$(x)$'
-figure_ops = dict(bbox_inches = 'tight', dpi = 600)
+figure_ops = dict(bbox_inches = 'tight', 
+                  format = 'eps', dpi=300, transparent=False,
+                 pad_inches=0)
+def get_initial_points(num_initial, x_max, **params):
+    ''' 
+    get initial points to feed to the root finder 
+    '''
+    # α2_1 = params['α2_of_1']
+    # α1_xm = fun_alpha1(x_max, **params)
 
+    gx_upper = 3# try this out
+    # Generate random values for N1, N2, and g(x) for each initial point
+    np.random.seed(42)
+    
+    # N1 and N2 are between 0 and 1, not including 0
+    N1_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
+    N2_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
+    
+    # g(x) is between 0 and gx_upper for each x = 1, 2, ..., x_max
+    g_values = np.random.uniform(0.01, gx_upper, (num_initial, x_max))  # Shape: (num_initial, x_max)
+    # Combine N1, N2, and g(x) into a single array
+    initial_points = np.hstack((N1_values[:, np.newaxis],  # Add N1 as the first column
+                                N2_values[:, np.newaxis],  # Add N2 as the second column
+                                g_values))  # Add g(x) as the remaining columns
+    
+    return initial_points
+
+def update_params(param_key, param, params_base):
+    '''
+    given params_base, makes a copy dictionary of parameters
+    and updates with the new param at param_key
+
+    noe if param_key is scale, updates β1 and H1 entries
+
+    @ returns: params
+    '''
+    params = params_base.copy()
+        
+    if param_key == "scale": # this means β1/β2 = H1/H2 and β2, H2 are set
+        params['β1'] = params['β2']*param
+        params['H1'] = params['H2']*param
+    else:
+        params[param_key] = param
+    return params
 def format_ax(ax,xlab,ylab, xlim = None, ylim=None,
               fs_labs = 20, fs_legend = 16, if_legend = False,
              ncol_legend = 1):
+    '''
+    applies my formatting to provided ax:
+    sets xlim, ylim, and fontsizes. gets rid of right and top borders, 
+    adds legend
+    @ no return
+    '''
     ax.set_xlabel(xlab, fontsize = fs_labs)
     ax.set_ylabel(ylab, fontsize = fs_labs)
     if xlim != None:
@@ -85,13 +135,19 @@ def add_arrow(line, start_ind = None,  direction='right', size=15, color=None):
     line.axes.annotate('',
         xytext=(xdata[start_ind], ydata[start_ind]),
         xy=(xdata[end_ind], ydata[end_ind]),
-        arrowprops=dict(arrowstyle="->", color=color),
-        size=size
+        arrowprops=dict(arrowstyle="->", color=color, 
+                        mutation_scale=15)
     )
     
 
 
 def plot_all(T,N1,N2,p,mean_x, xlim = [-10, 600]):
+    '''
+    plots N1, N2, p, and mean experienced group size
+    versus scaled time
+
+    @return: fig, ax
+    '''
     fig, ax = plt.subplots(1,1)
     ax.plot(T,N2,'k', label = r'$N_2$')
     ax.plot(T,N1,'r', label = r'$N_1$')
@@ -102,6 +158,12 @@ def plot_all(T,N1,N2,p,mean_x, xlim = [-10, 600]):
          xlim = xlim,fs_labs = 18)
     return fig, ax
 def plot_x_vs_y(x,y,xlab,ylab,arrow_inds):
+    '''
+    plots x on horizontal axis, y on vertical axis
+    adds arrows at x[arrow_inds]
+
+    @returns: fig, ax
+    '''
     fig, ax = plt.subplots(1,1)
     l = ax.plot(x,y,'k')
     for ind in arrow_inds:
@@ -151,6 +213,10 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500], ncol_legend = 1):
 
 def print_param_caption(Tx, η1, η2, A, β1, β2, H1, H2, α1_of_1, α2_of_1, 
                         s1, s2, α2_fun_type,**params):
+    '''
+    Prints parameter caption in latex format
+    no return
+    '''
     caption = 'The parameters are '
     caption += f'$\\eta_1 = {η1}, \\eta_2 = {η2}, '
     caption += f'A = {A}, \\beta_1 = {β1}, \\beta_2 = {β2}, '
@@ -172,7 +238,10 @@ def plot_F_equilibrium(paramvec, gxvecs, xvec, xlab, ylab,
                        fig = None, ax = None):
     '''
     Plots distribution g(x)
-    can take for gxvecs either g(x) or \bar{g}(x), the frequency of predators in groups of size x
+    can take for gxvecs either g(x) or \bar{g}(x), 
+    the frequency of predators in groups of size x
+    OUTDATED?
+    returns fig, ax
     '''
     if ax == None:
         fig, ax = plt.subplots(1,1)
@@ -218,6 +287,13 @@ def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey,
 def plot_freq_x_eq(paramvec, gxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
                        ncol_legend = 1, xlim = None, ylim = None,
                        fig = None, ax = None):
+    '''
+    uses plot_F_equilibriumt o plot the frequency of each group size x
+    at the (coexistence) equilibrium over time
+
+    OUTDATED?
+    returns fig, ax
+    '''
     prob_x = (xvec*gxvecs).T/Pvec
     fig, ax = plot_F_equilibrium(paramvec, prob_x, xvec, xlab, ylab, 
                        ncol_legend = ncol_legend, xlim = None, ylim = None,
@@ -241,3 +317,88 @@ def plot_W_mode_comparison(xvec,N1vec,N2vec,gxvecs, params, fig = None, ax = Non
 
     format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
     return fig, ax
+def get_traj_plot_input(params, t_f = 1000, initial_points = None, 
+                        num_init=2):
+    '''
+    initial_points is either none (so generates initial points) 
+    or a list of up to 4 points, each of form [N1,N2, g(1), g(2), ..., g(xm)]
+    '''
+    if type(initial_points) != np.ndarray: # so it's None or some invalid entry
+        print("generating initial points")
+        initial_points = get_initial_points(num_init,**params)
+    trajectories = []
+    for i, init_state in enumerate(initial_points):
+        #out2 = solve_ivp(grp.full_model, [0, t_f], init_state, 
+        #                 method = "LSODA", args = (True, params))
+        # results  = get_results(out2, x_max) # T, N1, N2, P, g_of_x_vec, mean_x
+        results = bounded_ivp(init_state, params)
+        trajectories.append(results)
+    return trajectories # each in form T, N1, N2, p, g_of_x_vec, mean_x
+def plot_with_arrow(ax, x,y,i, label, start_ind):
+    l = ax.plot(x,y,colors_x[i], label = label)
+    line_zorder = l[0].get_zorder()
+    ax.scatter(x[-1],y[-1],c='orange', 
+               marker = "*", s = 100, zorder=line_zorder+1)
+
+    #plot arrows
+    if type(start_ind) == int:
+        start_ind = [start_ind]
+    for elt in start_ind:
+        add_arrow(l[0], start_ind = elt)      
+
+def make_traj_plots(params, t_f =1000, 
+               grp_size1 = 2, grp_size2 = 3, start_inds = None,
+              initial_points = None, num_init = 4,
+                   if_legend = False):
+    '''
+    initial points: list of initial points of form [N1, N2, g(1), g(2), ..., g(x_max)]
+    params: params dictionary
+    t_f: final time point for solve_ivp simulation
+    grp_size1: group size on y axis of ax_g2
+    grp_size2: group size for y axis of ax_g3
+    start_inds: start index for arrow on plots in ax1, axN, ax_g2, ax_g3
+    '''
+
+    if start_inds == None:
+        print('No start indices for arrows. Using 50.')
+        row = [50,50,50,50]
+        start_inds = [row,row,row,row]
+    fig1, ax1 = plt.subplots(1,1) # N1 vs mean_x
+    figN, axN = plt.subplots(1,1) # N1 vs N2
+    fig_g2, ax_g2 = plt.subplots(1,1) #g(1) vs g(2)
+    fig_g3, ax_g3 = plt.subplots(1,1) #g(1) vs g(3)
+    
+    trajectories = get_traj_plot_input(params, t_f = t_f, 
+                                       initial_points = initial_points,
+                                       num_init = num_init)
+    
+    for i, traj in enumerate(trajectories):
+        T, N1, N2, P, g_of_x_vec, mean_x = traj
+        if np.any(np.isnan(mean_x)):
+            print("oh no! mean x is nan")
+        elif  np.any(mean_x<0):
+            print("oh no! mean x is negative")
+            print("i=%d"%i)
+        # check 
+        label = "Initial State %d"%i
+        plot_with_arrow(ax1, N1, mean_x,i,
+                        label, start_inds[0][i])
+        plot_with_arrow(axN, N1, N2, i, 
+                        label, start_inds[1][i])
+        #g(1) vs g(grp_size1)
+        plot_with_arrow(ax_g2, g_of_x_vec[0], g_of_x_vec[grp_size1-1], i, 
+                        label, start_inds[2][i])
+        #g(1) vs g(grp_size2)
+        plot_with_arrow(ax_g3, g_of_x_vec[0], g_of_x_vec[grp_size2 - 1], i, 
+                        label, start_inds[3][i])
+
+        #axN.plot(N1, N2, colors_x[i], label = label)
+        #ax_g2.plot(g_of_x_vec[0], g_of_x_vec[1], colors_x[i], label = label)
+        #ax_g3.plot(g_of_x_vec[0], g_of_x_vec[2], colors_x[i], label = label)
+
+    format_ax(ax1, N1lab,mean_x_lab, if_legend = if_legend)
+    format_ax(axN, N1lab,N2lab, if_legend = if_legend)
+    format_ax(ax_g2, 'g(1)', 'g(%d)'%grp_size1, if_legend = if_legend)
+    format_ax(ax_g3, 'g(1)', 'g(%d)'%grp_size2, if_legend = if_legend)
+
+    return fig1, figN, fig_g2, fig_g3

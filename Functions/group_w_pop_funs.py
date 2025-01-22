@@ -316,7 +316,7 @@ def mean_group_size_membership(g_of_x_vec, x_max, p):
             return sum(ans_to_sum)
 
  
-def bounded_ivp(y0,params, t_f = 1000):
+def bounded_ivp(y0,params, t_f = 1000, if_dict = False):
     '''
     NOTE: does not work for y0 = 0!!!!
     
@@ -341,14 +341,20 @@ def bounded_ivp(y0,params, t_f = 1000):
     y_trajectory = a*np.exp(b*u_trajectory)
 
     # extract results
+    
     x_max = params['x_max']
     N1, N2 = y_trajectory[0:2]
     g_of_x_vec = y_trajectory[2:]
     xvec = np.arange(1,x_max+1,1)
     p = np.sum(xvec*g_of_x_vec.T,1)
     mean_x = mean_group_size_membership(g_of_x_vec.T, x_max, p)
-    
-    return T, N1, N2, p, g_of_x_vec, mean_x
+    if if_dict:
+        return dict(
+            T=T, N1 = N1, N2 = N2, p = p, 
+            g = g_of_x_vec, mean_x = mean_x
+        )
+    else:
+        return T, N1, N2, p, g_of_x_vec, mean_x
 
 
     
