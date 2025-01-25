@@ -48,61 +48,40 @@ def iterate_to_eq(initialstate, t_f, params, if_dict=False):
                 success (bool): Whether the system successfully reached equilibrium.
                 timederivatives (np.ndarray): Time derivatives at the final state to verify equilibrium.
 
-    Behavior:
-        - Simulates the system dynamics over `t_f` time steps using `bounded_ivp`.
-        - Extracts the final state and checks if it is at equilibrium using `check_at_equilibrium2`.
-        - Includes mean experienced group size and variance in the output.
-        - Handles invalid results by setting `success=False` if the final state contains non-finite values.
-
-    Example Usage:
-        params = {
-            'η1': 0.2, 'η2': 0.5, 'A': 0.5, 'β1': 8, 'β2': 1,
-            'H1': 0, 'H2': 0, 'α1_of_1': 0.05, 'α2_of_1': 0.95,
-            's1': 2, 's2': 2, 'x_max': 5, 'd': 10, 'Tx': 0.01, 'pop_process': True
-        }
-        initialstate = [0.8, 0.7, 0.1, 0.2, 0.3, 0.1, 0.05]
-        t_f = 1000
-
-        # Run the function
-        eq, success, timederivatives = iterate_to_eq(initialstate, t_f, params, if_dict=True)
-
-        # Check results
-        print(eq['equilibrium'])  # Final equilibrium state
-        print("Success:", success)
-        print("Time derivatives:", timederivatives)
     '''
-
-    out2 = bounded_ivp(initialstate, params, t_f = t_f, if_dict = if_dict) # T, N1, N2, p, g_of_x_vec, mean_x
+    out2 = bounded_ivp(initialstate, params, t_f=t_f, if_dict=if_dict)
+    
     if if_dict:
-        T = out2['T']; N1 = out2['N1']; N2 = out2['N2'], P = out2['p'], g_of_x_vec = out2['g'], mean_x = out2['g'], var = out2['var']
+        T = out2['T']
+        N1 = out2['N1']
+        N2 = out2['N2']
+        P = out2['p']
+        g_of_x_vec = out2['g']
+        mean_x = out2['mean_x']
+        var = out2['var']
     else:
         T, N1, N2, P, g_of_x_vec, mean_x, var = out2
     
-    # extract results
-    traj = [N1,N2,*g_of_x_vec]
+    # Extract results
+    traj = [N1, N2, *g_of_x_vec]
     curr = [item[-1] for item in traj]
-    [N1,N2,*g_eq] = curr
+    [N1, N2, *g_eq] = curr
 
-    # check if at equilibrium
-    
-    success, timederivatives = check_at_equilibrium2(
-        N1, N2, g_eq, params
-    )
+    # Check if at equilibrium
+    success, timederivatives = check_at_equilibrium2(N1, N2, g_eq, params)
 
-    # get mean experienced
-    x_max = params["x_max"]
-    P_eq = P[-1]; 
-    
+    # Handle invalid results
     if not np.isfinite(curr).all():
         success = False
     
-    if if_dict == True:
-        eq_dict =  dict(equilibrium = np.array(curr), mean_x = mean_x, var = var)
+    if if_dict:
+        eq_dict = dict(equilibrium=np.array(curr), mean_x=mean_x[-1], var=var[-1])
         return eq_dict, success, timederivatives
     else:
         curr.append(mean_x[-1])
         curr.append(var[-1])
-        return curr, success, timederivatives 
+        return curr, success, timederivatives
+
    
 def get_equilibrium(params,N1_0,N2_0,g_of_x_vec):#, N1_0 = 0.5, N2_0 = 0.4, p_0 = 20, g_of_x_vec = None):
     '''
@@ -141,7 +120,7 @@ def get_equilibria_from_init_pts(initial_points, tol_unique=1e-8, if_dict = Fals
         out = get_equilibrium(params, N1_0 = point[0], N2_0 = point[1], g_of_x_vec = point[2:])
 
         # get the equilibrium values from the output
-        sol = get_results_eq(out, x_max, tol = 1e-8, if_dict = True)
+        sol = get_results_eq(out, x_max, if_dict = True)
         
         #P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success = [sol['P']
         
@@ -257,7 +236,7 @@ def get_equilibrium_prey_i_extinct(params, i, Nj_0 = 0.4,
     if not isinstance(g_of_x_vec, np.ndarray):
         #print('hi')
         x_f = 2 if x_max > 2 else x_max
-        g_of_x_vec = initiate_f_first_x(p_0, x_f, x_max)
+        g_of_x_vec = initiate_g_first_x(x_f, x_max)
         
     x0 = [Nj_0, *g_of_x_vec]
     if i == 1:    
@@ -285,12 +264,16 @@ def check_at_equilibrium2(N1,N2,g_of_x_vec, params):
     return success, deriv_vec
     # check derivative is zero
     # check sum x*g(x) = p
-def get_results_eq(out, x_max, tol = 1e-8, which_prey_extinct = -1, if_dict = False):
+def get_results_eq(out, x_max, which_prey_extinct = -1, if_dict = False):
     '''
     Extracts the state variables at the equilibrium, calculates 
     mean experienced group size, and checks that the equilibrium 
     is valid (within the state variable domains)
-
+    arguments:
+        out (dict) - the output of root
+        x_max (int) - maximum group size
+        which_prey_extinct(int) - indicates if big prey (=1), small prey (=2) or neither (=-1) are extinct
+        if_dict (bool) - whether to return outputs as dictionary
     @ returns: 
         - if if_dict = False: a tuple (P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success)
         - if_dict == True: a dictionary( with keys P, N1, N2, g, mean_x, success)
@@ -368,6 +351,30 @@ def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8, if_dict = Fals
     else:
         return sol # tuple of P, N1, N2, g, mean_x, var, success
     
+def get_equilibria_from_init_pts_i_extinct(initial_points, i, **params):
+    '''
+    iterate through the initial points and see if can use root to find equilibria
+    prey i (1 or 2) extinct
+    append to results if found an equilibrium
+
+    '''
+    x_max = params['x_max']
+    curr_eq = np.zeros(2+x_max) #N1 = 0, N2 = 0, g(x) = 0
+    results = []
+    for point in initial_points:
+        out = get_equilibrium_prey_i_extinct(params, i, Nj_0 = point[1], 
+                                             g_of_x_vec = point[2:])
+        sol = get_results_eq(out, x_max, which_prey_extinct = i, if_dict = True)
+        
+        if sol['success']: # the root finder found an equilibrium and it's "valid" (N1, N2, g(x) are in their ranges)
+            new_result = dict(equilibrium = np.array([sol['N1'], sol['N2'], *sol['g']]),
+                              mean_x = sol['mean_x'], var = sol['var'])
+
+            # append new_eq if it's unique from the last one
+            #results = check_unique(results, new_eq, tol_unique)
+            results.append(new_result)
+
+    return results
 ######################################################################
 
 # check and update functions below, if still needed
@@ -452,7 +459,8 @@ def get_equilibria_vary_param(paramvec, paramkey, **params):
                 stability_vec[i] = 0
         
     return Pvec, N1vec, N2vec, gxvecs,meanxvec,success_vec, stability_vec
- 
+
+
 
 ''' 
 retired i think

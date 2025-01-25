@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import sys
 sys.path.insert(1, 'Functions')
 #from scipy.optimize import root
@@ -35,7 +36,7 @@ def get_perturbations(equilibrium, num, strength):
     Generate perturbed versions of a given equilibrium.
 
     Args:
-        equilibrium (array): The equilibrium point to perturb.
+        equilibrium (array): The equilibrium point to perturb. [N1, N2, g(1), g(2), ..., g(xmax)]
         num (int): Number of perturbed points to generate.
         strength (float): Perturbation strength.
 
@@ -55,227 +56,149 @@ def get_perturbations(equilibrium, num, strength):
 
     # returns "Stable (attractive)", "Unstable", "Marginally stable (needs further analysis)"
     # and "Indeterminate stability (needs further analysis)"
-def classify_and_store_equilibrium(equilibrium, stable_points, unstable_points, param, 
-                                   params):
-    '''
-    Classify an equilibrium as stable or unstable and store it.
 
-    Args:
-        equilibrium (array): The equilibrium point to classify.
-        stable_points (list): List of stable points.
-        unstable_points (list): List of unstable points.
-        param (float): Current parameter value.
-        params (dict): System parameters.
 
-    Returns:
-        tuple of two lists: Updated stable and unstable points. Each is in format [param, *equilibrium]
-    '''
-    result = [param, *equilibrium]
-    if not np.isfinite(equilibrium).all():
-        print("in classify_and_store_equilibrium. equilibrium has an nan")
-        print(equilibrium)
-    stability = classify_equilibrium(equilibrium[:-1],params)
     
-    if stability == "Stable (attractive)":
-        stable_points.append(result)
-        
-    elif stability == "Unstable":
-        unstable_points.append(result)
-    return stable_points, unstable_points
 
-def store_equilibria_and_perturb(param, equilibria, stable_points, unstable_points, 
-                                 params, num_perturbations, perturb_strength):
-    '''
-    @inputs:
-    param - the parameter that we're at
-    equilibria each of form [N1,N2, g(1), ..., g(xm), mean_x]
-    stable_points, unstable_points - should be empty lists, TO-DO: get rid of this
-    params - dictionary of params
-    num_perturbations - the number of perturbed points to generate
-    perturb_strength - the entry-wise distance of each perturbed point from the original equilibrium
+def make_equilibria_dataframe(rows, param_key, x_max):
+    # Define the column names
+    columns = [param_key, 'N1', 'N2'] + \
+              [f'g{i}' for i in range(1, x_max + 1)] + \
+              ['mean_x', 'var', 'equilibrium_type', 'stability']
     
-    classify them using classify_and_store_equilibrium, 
-    and find perturbations for next iteration
+    # Initialize the DataFrame with specific dtypes
+    dtype_dict = {col: 'float64' for col in columns[:-2]}  # All numeric columns
+    dtype_dict.update({'equilibrium_type': 'object', 'stability': 'object'})  # Categorical columns
+    
+    df = pd.DataFrame(rows, columns=columns).astype(dtype_dict)  # Set explicit dtypes
+    return df
 
-    @outputs
-    returns stable_points, unstable_points, perturbed_pts
-    stable_points and unstable_points are lists of points in form [param, N1, N2, g(1),..., g(xm), mean_x]
-    perturbed_pts is list of points in form [N1, N2, g(1), g(2), ... , g(xm)
+
+
+
+def store_and_perturb(rows, equilibria, num_perturbations, perturb_strength, params, param, equilibrium_type):
     '''
-    perturbed_pts = [] # doing this just in case there are no equilibria
-
-    for equilibrium in equilibria:
-        # if unique, add to equilibria vector with the param in the first entry
-        if not np.isfinite(equilibrium).all():
-            print("store_equilibria_and_perturb")
-            print(equilibrium)
-        stable_points, unstable_points = classify_and_store_equilibrium(
-            equilibrium, stable_points, unstable_points, param, params
-        )
-        
-        # get a few perturbations from the equilibrium to generate new points to start from --> aadd this to perturbed pts vector
-        perturbed_pts = get_perturbations(np.array(equilibrium[:-1]), 
+    stores equilibrium in a row to eventually add to dataframe and gets perturbations
+    
+    arguments
+        rows (list): list of rows to add to dataframe, 
+                        with columns param, N1, N2, g(1),...,g(xmax), mean_x, var, equilibrium_type, stability
+        equilibria (list): list of dictionaries with keys equilibrium, mean_x, var (and maybe success?)
+        num_perturbations (int): number of perturbationsto make from each equilibrium
+        perturb_strength (float): how much to perturb by (typically 0.01)
+        param (float): the param value (that's being varied)
+    returns
+        tuple: rows (list) and perturbed_pts(list)
+    '''
+    
+    # Initiate empty perturbed_pts array
+    perturbed_pts = np.array([]).reshape(0, 2 + params['x_max'])
+    if np.size(equilibria) > 0:
+        for eq_dic in equilibria:
+            equilibrium = eq_dic['equilibrium']
+            perturbed_pts = get_perturbations(equilibrium, 
                                               num_perturbations, perturb_strength)
-
-    return stable_points, unstable_points, perturbed_pts
+            stability = classify_equilibrium(equilibrium, params) 
+            
+            # Prepare row for DataFrame
+            row = [param, *equilibrium, eq_dic['mean_x'], eq_dic['var'],
+                   equilibrium_type, stability]
+            rows.append(row)
+    return rows, perturbed_pts
     
-
-
-def get_equilibria_from_init_pts_i_extinct(results, initial_points, i, 
-                                           tol_unique = 1e-8, **params):
-    '''
-    iterate through the initial points and see if can use root to find equilibria
-    prey i (1 or 2) extinct
-    I need to ignore the first column from the initial points
-    append to results if found an equilibrium
-
-    This finds coexistence equilibria!!
-    '''
-    x_max = params['x_max']
-    curr_eq = np.zeros(2+x_max) #N1 = 0, N2 = 0, g(x) = 0
-    
-    for point in initial_points:
-        out = get_equilibrium_prey_i_extinct(params, i, Nj_0 = point[1], 
-                                             g_of_x_vec = point[2:])
-
-        # get the equilibrium values from the output
-        sol = get_results_eq(out, x_max, tol = 1e-8, which_prey_extinct = i)
-        P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success = sol 
-        
-        if success: # the root finder found an equilibrium and it's "valid" (N1, N2, g(x) are in their ranges)
-            new_eq = np.array([N1_eq, N2_eq, *g_eq, mean_x_eq])
-
-            # append new_eq if it's unique from the last one
-            #results = check_unique(results, new_eq, tol_unique)
-            results.append(new_eq)
-
-    return results
-    
-def store_pred_extinction_equilibria(stable_points, unstable_points, param, params,):
-    # add on predator extinction equilibria
-    # TO-DO: don't need stable_points and unstable_points as inputs
-    g_of_x_extinct = np.zeros(params['x_max'])
-    pred_extinct_equilibria = [[1,1,*g_of_x_extinct,1],[1,0,*g_of_x_extinct,1],
-                               [0,1,*g_of_x_extinct,1]]
-
-    # now add on prey extinction equilibria
-            # TO-DO
-    # First big prey extinct
-
-    for equilibrium in pred_extinct_equilibria:
-        
-        stable_points, unstable_points = classify_and_store_equilibrium(equilibrium, stable_points, 
-                                                                        unstable_points, param, params)
-    return stable_points, unstable_points
-
-
-def get_coexistence_equilibria(param_key, param_vec, num_init = 30,
-                               num_perturbations = 2,
-                          perturb_strength = 0.01, t_f = 1100,
-                          **params_base):
-    '''
-    Get equilibria using N1 >0, N2 > 0 nullclines
-    '''
-    # initiate empty perturbed_pts vector, containing points perturbed from the 
-    # last set of equilibria
-    perturbed_pts = np.array([]).reshape(0,2 + params_base['x_max'])
-    
-    #initiate empty vectors for stable and unstable pints
-    stable_points = []
-    unstable_points = []
-
-    # get random initial points
-    init_pts0 = get_initial_points(num_initial=num_init,**params_base.copy())
-    for param in param_vec:
-
-        # update param dictionary.
-        params = update_params(param_key, param, params_base)
-        
-        # add perturbed_pts to init_pts 
-        init_pts = np.vstack((init_pts0,perturbed_pts))
-
-        # use init pts to get equilibria in which N1,N2 > 0. 
-        # this function tries to return the unique equilibria (not repeats)
-        coexist_equilibria = get_equilibria_from_init_pts(
-            init_pts, tol_unique = 1e-8, **params.copy()
-        )
-
-        
-
-        # classify and store equilibria, find new perturbations
-        if np.size(coexist_equilibria) > 0:
-            out = store_equilibria_and_perturb(
-                param, coexist_equilibria,
-                stable_points, unstable_points, 
-                params, num_perturbations,
-                perturb_strength
-            )
-            stable_points, unstable_points, perturbed_pts = out
-        else:
-            # try iterating
-            initialstate = np.array([.7,.7,*initiate_g_first_x(3,params["x_max"])])
-            coexist_eq, success, _ = iterate_to_eq(initialstate, t_f, params)
-            coexist_eq = np.array(coexist_eq)
-            if success:
-                out = store_equilibria_and_perturb(
-                    param, [coexist_eq], stable_points, unstable_points,
-                    params, num_perturbations,
-                    perturb_strength
-                )
-                stable_points, unstable_points, perturbed_pts = out
-                
-
-    # convert to numpy arrays for easier manipulation
-    stable_points = np.array(stable_points)
-    unstable_points = np.array(unstable_points)
-
-    return stable_points, unstable_points
-
-
-def get_prey_extinct_equilibria(param_key, param_vec, i, num_init = 30,
+def get_prey_extinct_equilibria(param_key, param_vec, i, num_init = 10,
                                num_perturbations = 2,
                           perturb_strength = 0.01, 
                           **params_base):
-    '''
-    Get equilibria using either N1 =0 or N2 = 0 nullclines
-    '''
-    # initiate empty perturbed_pts vector, containing points perturbed from the 
-    # last set of equilibria
-    perturbed_pts = np.array([]).reshape(0,2 + params_base['x_max'])
-    
-    #initiate empty vectors for stable and unstable pints
-    stable_points = []
-    unstable_points = []
+
+    equilibrium_type = ['Big Prey Extinct','Small Prey Extinct'][i-1]
+    # Initiate empty perturbed_pts array
+    perturbed_pts = np.array([]).reshape(0, 2 + params_base['x_max'])
+
+    # initiate rows to append later
+    rows = []
 
     # get random initial points
     init_pts0= get_initial_points(num_initial=num_init,**params_base.copy())
+
+    for param in param_vec:
+        # Update param dictionary
+        params = update_params(param_key, param, params_base)
+        # Add perturbed_pts to init_pts
+        init_pts = np.vstack((init_pts0, perturbed_pts))
+
+        equilibria = get_equilibria_from_init_pts_i_extinct(
+            init_pts, i, **params
+        )
+        rows, perturbed_pts = store_and_perturb(rows, equilibria, num_perturbations, 
+                                                perturb_strength, params, param, equilibrium_type)
+        # if np.size(equilibria) > 0:
+        #     for eq_dic in equilibria:
+        #         equilibrium = eq_dic['equilibrium']
+        #         perturbed_pts = get_perturbations(equilibrium, 
+        #                                           num_perturbations, perturb_strength)
+        #         stability = classify_equilibrium(equilibrium, params) 
+                
+        #         # Prepare row for DataFrame
+        #         row = [param, *equilibrium, eq_dic['mean_x'], eq_dic['var'],
+        #                'Coexistence', stability]
+        #         rows.append(row)
+        
+    return rows
+
+def get_coexistence_equilibria(param_key, param_vec, num_init=10,
+                               num_perturbations=2, perturb_strength=0.01, t_f=1100,
+                               **params_base):
+    '''
+    Get equilibria using N1 >0, N2 > 0 nullclines.
+    '''
+    # Initiate empty perturbed_pts array
+    perturbed_pts = np.array([]).reshape(0, 2 + params_base['x_max'])
+
+
+    # initiate rows to append later
+    rows = []
+
+    # Get random initial points
+    init_pts0 = get_initial_points(num_initial=num_init, **params_base.copy())
     
     for param in param_vec:
-        # get random initial points. it helps to regenerate these each time i think
-        # update param dictionary.
+        # Update param dictionary
         params = update_params(param_key, param, params_base)
         
-        # add perturbed_pts to init_pts 
-        init_pts = np.vstack((init_pts0,perturbed_pts))
-        equilibria = get_equilibria_from_init_pts_i_extinct(
-            [], init_pts, i, **params, tol_unique = 1e-8)
+        # Add perturbed_pts to init_pts
+        init_pts = np.vstack((init_pts0, perturbed_pts))
 
-        # classify and store equilibria, find new perturbations
-        if np.size(equilibria) > 0:
-            out = store_equilibria_and_perturb(
-                param, equilibria,
-                stable_points, unstable_points, 
-                params, num_perturbations,
-                perturb_strength
-            )
-            stable_points, unstable_points, perturbed_pts = out
+        # Use init_pts to get equilibria in which N1, N2 > 0
+        coexist_equilibria = get_equilibria_from_init_pts(
+            init_pts, tol_unique=1e-8, **params.copy(), if_dict=True
+        )
+    
+        # Iterate if no points found using solver
+        if np.size(coexist_equilibria) == 0:
+            initialstate = np.array([.7, .7, *initiate_g_first_x(3, params["x_max"])])
+            coexist_eq, success, _ = iterate_to_eq(initialstate, t_f, params, if_dict = True)
+            coexist_equilibria = [coexist_eq] if success else []
 
-    # convert to numpy arrays for easier manipulation
-    stable_points = np.array(stable_points)
-    unstable_points = np.array(unstable_points)
+        # Classify stability and store equilibria
+        rows, perturbed_pts = store_and_perturb(rows, coexist_equilibria, num_perturbations, 
+                                                perturb_strength, params, param, 'Coexistence')
+        # if np.size(coexist_equilibria) > 0:
+        #     for eq_dic in coexist_equilibria:
+        #         equilibrium = eq_dic['equilibrium']
+        #         perturbed_pts = get_perturbations(equilibrium, 
+        #                                           num_perturbations, perturb_strength)
+        #         stability = classify_equilibrium(equilibrium, params) 
+                
+        #         # Prepare row for DataFrame
+        #         row = [param, *equilibrium, eq_dic['mean_x'], eq_dic['var'],
+        #                'Coexistence', stability]
+        #         rows.append(row)
 
-    return stable_points, unstable_points
-    # iterate over param_vec
+
+    
+    return rows
+
 def get_predator_extinct_equilibria(param_key, param_vec, params_base):
     '''
     Find equilibria where predators are extinct.
@@ -286,61 +209,35 @@ def get_predator_extinct_equilibria(param_key, param_vec, params_base):
         params_base (dict): Base system parameters.
 
     Returns:
-        tuple: Arrays of stable and unstable points with param being varied in first entry,
-                mean experienced grp size in last entry
+        array: Arrays of rows with param being varied in first entry
     '''
-    sp = [] # stable points
-    usp = [] # unstable points
+    rows = []
     for param in param_vec:
         params = update_params(param_key, param, params_base)
-        sp, usp = store_pred_extinction_equilibria(
-            sp, usp, param, params)
-    sp = np.array(sp)
-    usp = np.array(usp)
-    return sp, usp
-def plot_equilibria(axN1, axN2, axx, axNsum, 
-                    equilibria, markers, color, label2 = ""):
-    '''
-    Plot equilibria on axes for N1, N2, mean group size, and total prey density.
+        # get extinction
+        g_of_x_extinct = np.zeros(params['x_max'])
+        pred_extinct_equilibria = [[1,1,*g_of_x_extinct],[1,0,*g_of_x_extinct],
+                               [0,1,*g_of_x_extinct]]
+        for equilibrium in pred_extinct_equilibria:
+            stability = classify_equilibrium(equilibrium, params) 
+            # Prepare row for DataFrame
+            mean_x = 1
+            var = 0
+            row = [param, *equilibrium, mean_x, var,
+                       'Predator Extinct', stability]
+            rows.append(row)
+    return(rows)
 
-    Args:
-        axN1, axN2, axx, axNsum (Axes): Axes for plotting.
-        equilibria (array): Array of equilibria. 
-                            where first entry is corresponding parameter 
-                            that's being varied
-        markers (dict): Marker properties for the scatter plot.
-        color (str): Color for the points.
-        label2 (str): Additional label for the legend.
 
-    Returns:
-        tuple: Updated axes.
-    '''
-    markers = markers.copy()
-    markers["color"] = color
-    markers["label"] = markers["label"] + label2
-    if equilibria.size > 0:
-        paramvec = equilibria[:,0]
-        N1 = np.array(equilibria[:,1])
-        N2 = np.array(equilibria[:,2])
-        meanx = equilibria[:,-1]
-        
-        axN1.scatter(paramvec, N1, **markers)
-        axN2.scatter(paramvec, N2, **markers)
-        axx.scatter(paramvec, meanx, **markers)
-        axNsum.scatter(paramvec, N1+N2, **markers)
-    return axN1, axN2, axx, axNsum
-    
-def plot_bif_diagram2(param_key, param_vec, params_base, num_init = 30, 
+def get_bif_input(param_key, param_vec, params_base, num_init = 10, 
                       num_perturbations = 2,
                           perturb_strength = 0.01,t_f = 1100):
     '''
-    Generate and plot a bifurcation diagram for the system.
+    Generate a dataframe with inputs to use for plot a bifurcation diagram for the system.
     Dependencies:
         get_coexistence_equilibria
-        plot_equilibria
         get_predator_extinct_equilibria
         get_prey_extinct_equilibria
-        format_bif_diagrams
     Args:
         param_key (str): Parameter to vary.
         param_vec (array): Values of the parameter to iterate over.
@@ -349,6 +246,49 @@ def plot_bif_diagram2(param_key, param_vec, params_base, num_init = 30,
         num_perturbations (int): Number of perturbations to generate.
         perturb_strength (float): Perturbation strength.
         t_f (float): Simulation end time.
+    returns:
+        dataframe: a dataframe with columns `param_key`, N1, N2, g(1), g(2), ..., g(xmax), mean_x, var, equilibrium_type, stability
+        
+    '''
+    # get coexistence equilibria
+    rows_co = get_coexistence_equilibria(
+        param_key, param_vec,
+        num_init, num_perturbations, perturb_strength, t_f = t_f,
+        **params_base)
+    rows_pred_extinct = get_predator_extinct_equilibria(param_key, param_vec, params_base)
+    rows_prey1_extinct = get_prey_extinct_equilibria(param_key, param_vec, i=1, num_init = num_init,
+                               num_perturbations = num_perturbations,
+                          perturb_strength = perturb_strength, 
+                          **params_base) 
+    rows_prey2_extinct = get_prey_extinct_equilibria(param_key, param_vec, i=2, num_init = num_init,
+                               num_perturbations = num_perturbations,
+                          perturb_strength = perturb_strength, 
+                          **params_base) 
+
+    # Combine rows, skipping any empty arrays
+    rows_list = [rows_co, rows_pred_extinct, rows_prey1_extinct, rows_prey2_extinct]
+    non_empty_rows = [r for r in rows_list if len(r) > 0] 
+
+    # Perform stacking only on non-empty arrays
+    if non_empty_rows:  # Ensure there's something to stack
+        rows = np.vstack(non_empty_rows)
+    else:
+        rows = np.empty((0, params_base['x_max'] + 7))  # Create an empty array with the correct number of columns
+    # add all rows to a DataFrame
+    df = make_equilibria_dataframe(rows, param_key, params_base['x_max'])
+    return df
+    
+def plot_bif_diagrams(param_key, df):
+    '''
+    Generate and plot a bifurcation diagram for the system.
+    Dependencies:
+        plot_equilibria
+        get_bif_input
+        format_bif_diagrams
+    Args:
+        param_key (str): Parameter to vary. on x axis
+        df: dataframe with info on equilibria, generated using get_bif_input
+        
 
     Returns:
         tuple: 4 Figures for various bifurcation diagrams, 1 figure with just the legend
@@ -357,57 +297,75 @@ def plot_bif_diagram2(param_key, param_vec, params_base, num_init = 30,
     figN1, axN1 = plt.subplots(1,1)
     figN2, axN2 = plt.subplots(1,1)
     figNsum, axNsum = plt.subplots(1,1)
-    figlegend, axlegend = plt.subplots(1,1)
-
+    figvar, axvar = plt.subplots(1,1)
+    
+    # plot
+    color_map = {
+        'Coexistence': 'black',
+        'Predator Extinct': 'blue',
+        'Big Prey Extinct': 'red',
+        'Small Prey Extinct': 'cyan'
+    }
     stable_markers = dict(label = "Stable ", marker = "o", s = 5)
     unstable_markers = dict(label = "Unstable ", marker = 'D', 
                             s = 30, facecolors='none')
+    marker_map = {
+        "Stable (attractive)": stable_markers,    # Filled circle
+        "Unstable": unstable_markers   # Open diamond
+    }
+
+    y_col = 'N1'
+    for (equilibrium_type, stability), group in df.groupby(['equilibrium_type', 'stability']):
+        color = color_map.get(equilibrium_type, 'gray')  # Default to gray if unknown type
+        marker_dict = marker_map.get(stability, 'x')         # Default to 'x' if unknown stability
+        # edgecolor = 'black' if stability == 'Unstable' else None
+
+        # Scatter plot for each group
+        for y_col, ax in zip(['mean_x','N1','N2','var'],[axx, axN1, axN2, axvar]):
+            ax.scatter(
+                group[param_key], group[y_col],
+                color=color, **marker_dict
+            )
+        axNsum.scatter(group[param_key], group['N1']+group['N2'],
+                color=color, **marker_dict)
+
+    format_bif_diagrams(axx, axN1, axN2, axNsum, axvar, param_key)
+        
+    return dict(mean_x = figx, N1 = figN1, N2 = figN2, N1_plus_N2 =figNsum, var=figvar)
+
+def plot_bif_legend():
+    # add legend on separate figure
     
-    #plot coexistence equilibria - black
-    # get coexistence equilibria
+    figlegend, axlegend = plt.subplots(1,1)
+    
+    stable_markers = dict(marker = "o", markersize = 3, linestyle = '')
+    unstable_markers = dict(marker = 'D', color='none',markersize=6, linestyle='')
+    
+    legend_handles = [
+        # Stable (dots)
+        Line2D([0], [0], **stable_markers, color='black', label='Stable, Coexist'),
+        Line2D([0], [0], **stable_markers, color='blue', label='Stable, Predator Extinct'),
+        Line2D([0], [0], **stable_markers, color='red', label='Stable, Prey 1 Extinct'),
+        Line2D([0], [0], **stable_markers, color='cyan', label='Stable, Prey 2 Extinct'),
+    
+        # Unstable (unfilled diamonds)
+        Line2D([0], [0],  **unstable_markers, markeredgecolor='black', label='Unstable, Coexist'),
+        Line2D([0], [0], **unstable_markers, markeredgecolor='blue', label='Unstable, Predator Extinct'),
+        Line2D([0], [0], **unstable_markers, markeredgecolor='red', label='Unstable, Prey 1 Extinct'),
+        Line2D([0], [0], **unstable_markers, markeredgecolor='cyan', label='Unstable, Prey 2 Extinct'),
+    ]
+    axlegend.axis('off') 
+    axlegend.legend(handles = legend_handles, loc='center', ncol = 1,
+                   fontsize = 20)
 
-    sp, usp = get_coexistence_equilibria(
-        param_key, param_vec,
-        num_init, num_perturbations, perturb_strength, t_f = t_f,
-        **params_base)
-    label2 = "coexist"
-    axes = plot_equilibria(
-        axN1, axN2, axx, axNsum, 
-                    sp, stable_markers, 'k', label2 = label2)
-    axes = plot_equilibria(*axes, usp, unstable_markers,'k', 
-                           label2 = label2)
-
-
-    # plot predator extinction equilibria - blue
-    label2 = "Predators Extinct"#'$p^*=0$'
-    sp, usp = get_predator_extinct_equilibria(param_key, param_vec, params_base) 
-    axes = plot_equilibria(*axes, sp, stable_markers,'b', label2 = label2)
-    axes = plot_equilibria(*axes, usp, unstable_markers,'b', label2)
-
-    # plot prey 1 and 2 extinction equilibria - red and cyan, respectively
-    prey_colors = ['red', 'cyan']
-    N_legend_labs = ["Big Prey Extinct", "Small Prey Extinct"]#[r'$N^*_1=0$', r'$N^*_2=0$']
-    for i in [1,2]:
-        sp, usp = get_prey_extinct_equilibria(
-            param_key, param_vec,i, num_init, num_perturbations,
-            perturb_strength,**params_base
-        )
-        c = prey_colors[i-1]
-        label2 = N_legend_labs[i-1]
-        axes = plot_equilibria(*axes, sp, stable_markers,c,
-                              label2 = label2)
-        axes = plot_equilibria(*axes, usp, unstable_markers,c,
-                              label2 = label2)
-    format_bif_diagrams(axx, axN1, axN2, axNsum, axlegend, param_key)
-    return figx, figN1, figN2, figNsum, figlegend
-
-def format_bif_diagrams(axx, axN1, axN2, axNsum, axlegend, param_key):
+    return figlegend, axlegend
+    
+def format_bif_diagrams(axx, axN1, axN2, axNsum, axvar, param_key):
     '''
     Format bifurcation diagram axes and add a legend.
 
     Args:
         axx, axN1, axN2, axNsum (Axes): Axes for plotting.
-        axlegend (Axes): Axis for the legend.
         param_key (str): Parameter used for the x-axis.
 
     Returns:
@@ -431,42 +389,23 @@ def format_bif_diagrams(axx, axN1, axN2, axNsum, axlegend, param_key):
                 scale = "Prey size ratio, " + r'$\beta_1/\beta_2$')
     
     Nsumlab = "Sum of Prey Densities,\n "+r'$N_1 + N_2$'
-    for ax, ylab in zip([axx, axN1, axN2, axNsum],
+    for ax, ylab in zip([axx, axN1, axN2, axNsum, axvar],
                         [mean_x_lab, N1lab, N2lab,
-                        Nsumlab]):
+                        Nsumlab, standard_labs['var']]):
         xlab = param_lab_dic[param_key]
         format_ax(ax,xlab,ylab, xlim = None, ylim=None,
               fs_labs = 20, if_legend = False)
 
-    # add legend
-    stable_markers = dict(marker = "o", markersize = 3, linestyle = '')
-    unstable_markers = dict(marker = 'D', color='none',markersize=6, linestyle='')
-    
-    legend_handles = [
-        # Stable (dots)
-        Line2D([0], [0], **stable_markers, color='black', label='Stable, Coexist'),
-        Line2D([0], [0], **stable_markers, color='blue', label='Stable, Predator Extinct'),
-        Line2D([0], [0], **stable_markers, color='red', label='Stable, Prey 1 Extinct'),
-        Line2D([0], [0], **stable_markers, color='cyan', label='Stable, Prey 2 Extinct'),
-    
-        # Unstable (unfilled diamonds)
-        Line2D([0], [0],  **unstable_markers, markeredgecolor='black', label='Unstable, Coexist'),
-        Line2D([0], [0], **unstable_markers, markeredgecolor='blue', label='Unstable, Predator Extinct'),
-        Line2D([0], [0], **unstable_markers, markeredgecolor='red', label='Unstable, Prey 1 Extinct'),
-        Line2D([0], [0], **unstable_markers, markeredgecolor='cyan', label='Unstable, Prey 2 Extinct'),
-    ]
-    axlegend.axis('off') 
-    axlegend.legend(handles = legend_handles, loc='center', ncol = 1,
-                   fontsize = 20)
+
 
 #### retired or not used anymore
-def check_unique(results, new_eq_dict, tol_unique = 1e-8):
+def check_unique(results, new_eq_dic, tol_unique = 1e-8):
     '''
     Check if a new equilibrium is unique and append it to the results if it is.
 
     Args:
         results (list): List of dictionaries of existing equilibria.
-        new_eq_dict (dict): New equilibrium to check.
+        new_eq_dic (dict): New equilibrium to check.
         tol_unique (float): Tolerance for determining uniqueness.
 
     Returns:
@@ -474,8 +413,8 @@ def check_unique(results, new_eq_dict, tol_unique = 1e-8):
     '''
     if len(results)>0:
         for result in results:
-            if np.any(np.abs(new_eq_dict['equilibrium'] - result['equilibrium']) > tol_unique):
-                results.append(new_eq_dict)
+            if np.any(np.abs(new_eq_dic['equilibrium'] - result['equilibrium']) > tol_unique):
+                results.append(new_eq_dic)
     else:
-        results.append(new_eq_dict)
+        results.append(new_eq_dic)
     return results
