@@ -10,70 +10,37 @@ from equilibria_funs import *
 from sim_graph_funs import *
 from matplotlib.lines import Line2D
 
+param_lab_dic = dict(η1 = "Growth of big prey, " + r'$\eta_1$', 
+            η2 = "Growth of small prey, " + r'$\eta_1$', 
+            A = "Relative attack rates, " + r'$A$', 
+            β1 = "Benefit of big prey, " + r'$\beta_1$',
+            β2 = "Benefit of small prey, " + r'$\beta_1$', 
+            H1= "Handling time of big prey, " + r'$H_1$', 
+            H2= "Handling time of small prey," + r'$H_2$', 
+            α1_of_1= "Capture probability of big prey\nby solitary predator, " + r'$\alpha_1(1)$',
+            α2_of_1="Capture probability of small prey\nby solitary predator, " + r'$\alpha_2(1)$', 
+            s1="Critical group size for big prey, " + r'$s_1$', 
+            s2="Critical group size for small prey, " + r'$s_2$', 
+            α2_fun_type = 'Shape of capture probability for small prey',
+            x_max = 'Max group size, ' + r'$x_{max}$',
+            d = "Decision accuracy, " + r'$d$',
+            Tx = "Timescale of group dynamics, " + r'$T_x$',
+            scale = "Prey size ratio, " + r'$\beta_1/\beta_2$')
 
-def get_initial_points(num_initial, x_max, **params):
-    ''' 
-    get initial points to feed to the root finder 
-    '''
-    # α2_1 = params['α2_of_1']
-    # α1_xm = fun_alpha1(x_max, **params)
 
-    gx_upper = 3# try this out
-    # Generate random values for N1, N2, and g(x) for each initial point
-    np.random.seed(42)
     
-    # N1 and N2 are between 0 and 1, not including 0
-    N1_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
-    N2_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
-    
-    # g(x) is between 0 and gx_upper for each x = 1, 2, ..., x_max
-    g_values = np.random.uniform(0.01, gx_upper, (num_initial, x_max))  # Shape: (num_initial, x_max)
-    # Combine N1, N2, and g(x) into a single array
-    initial_points = np.hstack((N1_values[:, np.newaxis],  # Add N1 as the first column
-                                N2_values[:, np.newaxis],  # Add N2 as the second column
-                                g_values))  # Add g(x) as the remaining columns
-    
-    return initial_points
 
-def check_unique(results, new_eq, tol_unique = 1e-8):
-    '''
-    checks if new_eq is in results
-    new_eq in format [N1_eq, N2_eq, *g_eq, mean_x_eq]
-    '''
-    if len(results)>0:
-        for result in results:
-            if np.any(np.abs(new_eq - result) > tol_unique):
-                results.append(new_eq)
-    else:
-        results.append(new_eq)
-    return results
-    
-def get_equilibria_from_init_pts(initial_points, tol_unique=1e-8, **params):
-    '''
-    iterate through the initial points and see if can use root to find equilibria
-
-    This finds coexistence equilibria!!
-    '''
-    x_max = params['x_max']
-    #curr_eq = np.zeros(2+x_max) #N1 = 0, N2 = 0, g(x) = 0
-    results = []
-    for i, point in enumerate(initial_points):
-        out = get_equilibrium(params, N1_0 = point[0], N2_0 = point[1], g_of_x_vec = point[2:])
-
-        # get the equilibrium values from the output
-        sol = get_results_eq(out, x_max, tol = 1e-8)
-        P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, success = sol 
-        
-        if success: # the root finder found an equilibrium and it's "valid" (N1, N2, g(x) are in their ranges)
-            new_eq = np.array([N1_eq, N2_eq, *g_eq, mean_x_eq])
-            results.append(new_eq)
-            #results = check_unique(results, new_eq, tol_unique)
-    return results
 def get_perturbations(equilibrium, num, strength):
     '''
-    @inputs:
-    equilibrium - N1, N2, g(1), ... g(x_max)
-    num - number of perturbations to return
+    Generate perturbed versions of a given equilibrium.
+
+    Args:
+        equilibrium (array): The equilibrium point to perturb.
+        num (int): Number of perturbed points to generate.
+        strength (float): Perturbation strength.
+
+    Returns:
+        np.ndarray: Array of perturbed points.
     '''
     #  initiate empty array
     perturbations = np.zeros((num, equilibrium.shape[0]))
@@ -85,32 +52,27 @@ def get_perturbations(equilibrium, num, strength):
         curr_perturbed[2:] = np.clip(curr_perturbed[2:], a_min = 1e-8, a_max = None)
         perturbations[i,:] = curr_perturbed
     return perturbations
-def classify_equilibrium(equilibrium, params):
-    '''
-    equilibrium = [N1, N2, *gvec]
-    '''
-    [N1,N2,*gvec] = equilibrium
-    J = fun_Jac(N1,N2,gvec,**params) 
-    if not np.isfinite(J).all():
-        print(J)
-        print(equilibrium)
-        print(params)
-    stability = classify_stability(J)
-    
-    return stability
+
     # returns "Stable (attractive)", "Unstable", "Marginally stable (needs further analysis)"
     # and "Indeterminate stability (needs further analysis)"
 def classify_and_store_equilibrium(equilibrium, stable_points, unstable_points, param, 
                                    params):
     '''
-    given equilibrium, which is of form N1, N2, g(1), ..., g(xm), mean_x
+    Classify an equilibrium as stable or unstable and store it.
 
-    outputs stable_points, unstable_points
-    each point in list of form [param, N1, N2, g(1), ..., g(xm), mean_x]
+    Args:
+        equilibrium (array): The equilibrium point to classify.
+        stable_points (list): List of stable points.
+        unstable_points (list): List of unstable points.
+        param (float): Current parameter value.
+        params (dict): System parameters.
+
+    Returns:
+        tuple of two lists: Updated stable and unstable points. Each is in format [param, *equilibrium]
     '''
     result = [param, *equilibrium]
     if not np.isfinite(equilibrium).all():
-        print("in classify_and_store_equilibrium")
+        print("in classify_and_store_equilibrium. equilibrium has an nan")
         print(equilibrium)
     stability = classify_equilibrium(equilibrium[:-1],params)
     
@@ -157,15 +119,7 @@ def store_equilibria_and_perturb(param, equilibria, stable_points, unstable_poin
 
     return stable_points, unstable_points, perturbed_pts
     
-def update_params(param_key, param, params_base):
-    params = params_base.copy()
-        
-    if param_key == "scale": # this means β1/β2 = H1/H2 and β2, H2 are set
-        params['β1'] = params['β2']*param
-        params['H1'] = params['H2']*param
-    else:
-        params[param_key] = param
-    return params
+
 
 def get_equilibria_from_init_pts_i_extinct(results, initial_points, i, 
                                            tol_unique = 1e-8, **params):
@@ -324,7 +278,16 @@ def get_prey_extinct_equilibria(param_key, param_vec, i, num_init = 30,
     # iterate over param_vec
 def get_predator_extinct_equilibria(param_key, param_vec, params_base):
     '''
-    Returns equilibria where predators are extinct
+    Find equilibria where predators are extinct.
+
+    Args:
+        param_key (str): Parameter to vary.
+        param_vec (array): Values of the parameter to iterate over.
+        params_base (dict): Base system parameters.
+
+    Returns:
+        tuple: Arrays of stable and unstable points with param being varied in first entry,
+                mean experienced grp size in last entry
     '''
     sp = [] # stable points
     usp = [] # unstable points
@@ -337,6 +300,21 @@ def get_predator_extinct_equilibria(param_key, param_vec, params_base):
     return sp, usp
 def plot_equilibria(axN1, axN2, axx, axNsum, 
                     equilibria, markers, color, label2 = ""):
+    '''
+    Plot equilibria on axes for N1, N2, mean group size, and total prey density.
+
+    Args:
+        axN1, axN2, axx, axNsum (Axes): Axes for plotting.
+        equilibria (array): Array of equilibria. 
+                            where first entry is corresponding parameter 
+                            that's being varied
+        markers (dict): Marker properties for the scatter plot.
+        color (str): Color for the points.
+        label2 (str): Additional label for the legend.
+
+    Returns:
+        tuple: Updated axes.
+    '''
     markers = markers.copy()
     markers["color"] = color
     markers["label"] = markers["label"] + label2
@@ -356,7 +334,24 @@ def plot_bif_diagram2(param_key, param_vec, params_base, num_init = 30,
                       num_perturbations = 2,
                           perturb_strength = 0.01,t_f = 1100):
     '''
-    using the output from get_bif_diagram_input, plots a bifurcation diagram
+    Generate and plot a bifurcation diagram for the system.
+    Dependencies:
+        get_coexistence_equilibria
+        plot_equilibria
+        get_predator_extinct_equilibria
+        get_prey_extinct_equilibria
+        format_bif_diagrams
+    Args:
+        param_key (str): Parameter to vary.
+        param_vec (array): Values of the parameter to iterate over.
+        params_base (dict): Base system parameters.
+        num_init (int): Number of random initial points to generate.
+        num_perturbations (int): Number of perturbations to generate.
+        perturb_strength (float): Perturbation strength.
+        t_f (float): Simulation end time.
+
+    Returns:
+        tuple: 4 Figures for various bifurcation diagrams, 1 figure with just the legend
     '''
     figx, axx = plt.subplots(1,1)
     figN1, axN1 = plt.subplots(1,1)
@@ -407,7 +402,18 @@ def plot_bif_diagram2(param_key, param_vec, params_base, num_init = 30,
     return figx, figN1, figN2, figNsum, figlegend
 
 def format_bif_diagrams(axx, axN1, axN2, axNsum, axlegend, param_key):
-    xlab_dic = dict(η1 = "Growth of big prey, " + r'$\eta_1$', 
+    '''
+    Format bifurcation diagram axes and add a legend.
+
+    Args:
+        axx, axN1, axN2, axNsum (Axes): Axes for plotting.
+        axlegend (Axes): Axis for the legend.
+        param_key (str): Parameter used for the x-axis.
+
+    Returns:
+        None
+    '''
+    param_lab_dic = dict(η1 = "Growth of big prey, " + r'$\eta_1$', 
                 η2 = "Growth of small prey, " + r'$\eta_1$', 
                 A = "Relative attack rates, " + r'$A$', 
                 β1 = "Benefit of big prey, " + r'$\beta_1$',
@@ -428,7 +434,7 @@ def format_bif_diagrams(axx, axN1, axN2, axNsum, axlegend, param_key):
     for ax, ylab in zip([axx, axN1, axN2, axNsum],
                         [mean_x_lab, N1lab, N2lab,
                         Nsumlab]):
-        xlab = xlab_dic[param_key]
+        xlab = param_lab_dic[param_key]
         format_ax(ax,xlab,ylab, xlim = None, ylim=None,
               fs_labs = 20, if_legend = False)
 
@@ -452,3 +458,24 @@ def format_bif_diagrams(axx, axN1, axN2, axNsum, axlegend, param_key):
     axlegend.axis('off') 
     axlegend.legend(handles = legend_handles, loc='center', ncol = 1,
                    fontsize = 20)
+
+#### retired or not used anymore
+def check_unique(results, new_eq_dict, tol_unique = 1e-8):
+    '''
+    Check if a new equilibrium is unique and append it to the results if it is.
+
+    Args:
+        results (list): List of dictionaries of existing equilibria.
+        new_eq_dict (dict): New equilibrium to check.
+        tol_unique (float): Tolerance for determining uniqueness.
+
+    Returns:
+        list: Updated results with the new equilibrium appended if unique.
+    '''
+    if len(results)>0:
+        for result in results:
+            if np.any(np.abs(new_eq_dict['equilibrium'] - result['equilibrium']) > tol_unique):
+                results.append(new_eq_dict)
+    else:
+        results.append(new_eq_dict)
+    return results

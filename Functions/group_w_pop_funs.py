@@ -344,17 +344,19 @@ def bounded_ivp(y0,params, t_f = 1000, if_dict = False):
     
     x_max = params['x_max']
     N1, N2 = y_trajectory[0:2]
-    g_of_x_vec = y_trajectory[2:]
-    xvec = np.arange(1,x_max+1,1)
-    p = np.sum(xvec*g_of_x_vec.T,1)
+    g_of_x_vec = y_trajectory[2:] #dimensions x_max x T
+    xvec = np.arange(1,x_max+1,1)[:,np.newaxis]
+    p = np.sum(xvec*g_of_x_vec,0)
+    v = var_of_experienced_grp_size(g_of_x_vec)
     mean_x = mean_group_size_membership(g_of_x_vec.T, x_max, p)
+    var_exp_x = var_of_experienced_grp_size(g_of_x_vec)
     if if_dict:
         return dict(
             T=T, N1 = N1, N2 = N2, p = p, 
-            g = g_of_x_vec, mean_x = mean_x
+            g = g_of_x_vec, mean_x = mean_x, var = var_exp_x
         )
     else:
-        return T, N1, N2, p, g_of_x_vec, mean_x
+        return T, N1, N2, p, g_of_x_vec, mean_x, var_exp_x
 
 
     
@@ -370,4 +372,92 @@ def transformed_model(T, u0, arg, params):
     y_ = np.array(y_)
     u_ = y_/(b*y0)
     return u_
-        
+
+def var_of_experienced_grp_size(group_densities, epsilon=1e-12):   
+    '''
+    Calculate the variance of experienced group size 
+    from a vector of group densities.
+    Args:
+        group_densities (array-like): Matrix (or vector) of group densities.
+            - If a vector: [g(1), g(2), ..., g(xmax)].
+            - If a matrix: shape (xmax, time_steps), with each column representing densities at a time point. 
+        epsilon (float): Small value added to the denominator to avoid division by zero (numerical regularization)
+    Returns:
+        float: Variance of the group size. Is 0 if predators extinct.
+    '''
+    group_densities = np.array(group_densities)
+
+    # Group sizes (x = 1, 2, ..., xmax)
+    x = np.arange(1, group_densities.shape[0] + 1)# shape: (xmax,) 
+    if group_densities.ndim == 1:
+        axis = None
+    elif group_densities.ndim == 2:
+        axis = 0 # for summing
+        x = x[:,np.newaxis]
+    
+    # calculate predator population density p
+    p = np.sum(x*group_densities, axis = axis)
+    p = np.maximum(p, epsilon) # numerical regularization
+
+    # calculate probability a predator is in a group of size x
+    prob_experience_x = x*group_densities/p
+
+    # Compute E[X] (mean experienced group size)
+    mean_exp_x = np.sum(x * prob_experience_x, axis = axis)
+
+    # Compute E[X^2] (mean of squared group sizes) for each column
+    mean_x_squared = np.sum((x**2) * prob_experience_x, axis=axis) 
+    
+    # Variance = E[X^2] - (E[X])^2
+    variance = mean_x_squared - (mean_exp_x**2)
+    return variance
+    
+def get_list_of_trajectories(params, t_f=1000, initial_points=None, num_init=4):
+    '''
+    Generates a list of trajectories by simulating the system from a set of initial conditions.
+
+    Args:
+        params (dict): Dictionary of system parameters used in the simulation.
+        t_f (int, optional): Final time for the simulation (default is 1000).
+        initial_points (array-like, optional): Initial points for the simulation.
+            Each point is a list of the form [N1, N2, g(1), g(2), ..., g(xm)].
+            If None, initial points will be generated using `get_initial_points`.
+        num_init (int, optional): Number of initial points to generate if `initial_points` is None (default is 4).
+
+    Returns:
+        list of dict: A list of trajectories. Each trajectory is a dictionary returned by the `bounded_ivp` function
+                      and includes keys like 'T', 'N1', 'N2', 'g', 'p', and 'mean_x'.
+
+    Behavior:
+        - If `initial_points` is not provided or invalid, generates `num_init` initial points using `get_initial_points`.
+        - Simulates the system for each initial point using the `bounded_ivp` function.
+        - Appends the resulting trajectory dictionary to the output list.
+
+    Dependencies:
+        - `get_initial_points`: Function to generate initial points if not provided.
+        - `bounded_ivp`: Function that simulates the system and returns a trajectory as a dictionary.
+
+    Example Usage:
+        params = {
+            'η1': 0.2, 'η2': 0.5, 'A': 0.5, 'β1': 8, 'β2': 1,
+            'H1': 0, 'H2': 0, 'α1_of_1': 0.05, 'α2_of_1': 0.95,
+            's1': 2, 's2': 2, 'α2_fun_type': 'constant', 'x_max': 5,
+            'd': 10, 'Tx': 0.01, 'pop_process': True
+        }
+
+        # Generate trajectories
+        trajectories = get_list_of_trajectories(params, t_f=1000, num_init=4)
+
+        # Access the first trajectory
+        first_traj = trajectories[0]
+        print(first_traj['T'])  # Time points
+        print(first_traj['N1'])  # Big prey densities
+    '''
+    if type(initial_points) != np.ndarray: # so it's None or some invalid entry
+        print("generating initial points")
+        initial_points = get_initial_points(num_init,**params)
+    trajectories = []
+    for i, init_state in enumerate(initial_points):
+        results = bounded_ivp(init_state, params, if_dict=True)
+        trajectories.append(results)
+    return trajectories # each is a dictionary

@@ -5,7 +5,7 @@ from group_w_pop_funs import *
 from scipy.integrate import solve_ivp
 from scipy.optimize import root
 from local_stability_funs import *
-from equilibria_funs import *
+#from equilibria_funs import *
 
 
 #colors = ['k','r','b','cyan', 'magenta','orange',
@@ -23,32 +23,92 @@ mean_x_lab = "Mean Experienced\nGroup Size"
 freq_x_lab = r'Freq$(x)$'
 β1lab = r'$\beta_1$'
 gxlab = r'g$(x)$'
+def gxlabel(i):
+    first_three = ["Density of singletons,\n" + r'$g(1)$', 
+                   "Density of pairs,\n" + r'$g(2)$', 
+                   "Density of trios,\n" + r'$g(3)$'] 
+    if i <4:
+        return first_three[i-1]
+    else:
+        return "Density of groups\n of size %d, "%i + r'$g($' + str(i) + r'$)'
+standard_labs = dict(
+    P = r'$P$,  Pred. Scaled Density', N1 = r'$N_1$, Scaled Big Prey'+ '\nDensity', 
+    N2 = r'$N_2$, Scaled Small Prey' + '\nDensity', T = r'$T$, Scaled time',
+    mean_x = "Mean Experienced\nGroup Size",
+    freq_x = r'Freq$(x)$', β1 = r'$\beta_1$', gx = r'g$(x)$', 
+    var = "Variance of\nExperienced Group Size"
+)
+
 figure_ops = dict(bbox_inches = 'tight', 
                   format = 'eps', dpi=300, transparent=False,
                  pad_inches=0)
-def get_initial_points(num_initial, x_max, **params):
+def get_initial_points(num_initial, x_max, p_upper = None, **params):
     ''' 
     get initial points to feed to the root finder 
     '''
     # α2_1 = params['α2_of_1']
     # α1_xm = fun_alpha1(x_max, **params)
 
-    gx_upper = 3# try this out
     # Generate random values for N1, N2, and g(x) for each initial point
     np.random.seed(42)
     
     # N1 and N2 are between 0 and 1, not including 0
     N1_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
     N2_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
-    
-    # g(x) is between 0 and gx_upper for each x = 1, 2, ..., x_max
-    g_values = np.random.uniform(0.01, gx_upper, (num_initial, x_max))  # Shape: (num_initial, x_max)
+
+    if p_upper == None:
+        gx_upper = 3# try this out
+        # g(x) is between 0 and gx_upper for each x = 1, 2, ..., x_max
+        g_values = np.random.uniform(0.01, gx_upper, (num_initial, x_max))  # Shape: (num_initial, x_max)
+    else:
+        g_values = get_random_g_bounded_p(p_upper, num_initial, x_max)
+                                          
     # Combine N1, N2, and g(x) into a single array
     initial_points = np.hstack((N1_values[:, np.newaxis],  # Add N1 as the first column
                                 N2_values[:, np.newaxis],  # Add N2 as the second column
                                 g_values))  # Add g(x) as the remaining columns
     
     return initial_points
+def get_random_g_bounded_p(p_upper, num_initial, x_max):
+    """
+    Generates random g values such that sum(x * g(x)) <= p_upper.
+    Repeats the process until num_initial valid g vectors are obtained.
+    
+    Args:
+        p_upper (float): Upper bound for the sum(x * g(x)).
+        num_initial (int): Desired number of valid g vectors.
+        x_max (int): Maximum group size.
+
+    Returns:
+        np.ndarray: An array of shape (num_initial, x_max) containing valid g vectors.
+    """
+    g_list = []
+    while len(g_list) < num_initial:
+        g_mat = np.zeros((num_initial, x_max))
+        preds_left = p_upper * np.ones(num_initial)  # Track remaining predator allocation for each vector
+        
+        for x in range(1, x_max + 1):
+            gi = np.random.uniform(0.01, preds_left / x, num_initial)
+            g_mat[:, x - 1] = gi
+            
+            # Update current predator population
+            preds_left -= x * gi
+            preds_left[preds_left < 0] = 0  # Ensure no negative remaining capacity
+    
+        # Calculate total population p for each g vector
+        p_vals = np.sum(g_mat * np.arange(1, x_max + 1), axis=1)
+        
+        # Filter valid g vectors where total population <= p_upper
+        valid_indices = np.where(p_vals <= p_upper)[0]
+        valid_g = g_mat[valid_indices]
+        
+        # Add valid g vectors to the list
+        g_list.extend(valid_g.tolist())
+
+    # Limit the result to exactly num_initial vectors
+    g_good = np.array(g_list[:num_initial])
+
+    return g_good
 
 def update_params(param_key, param, params_base):
     '''
@@ -233,90 +293,7 @@ def print_param_caption(Tx, η1, η2, A, β1, β2, H1, H2, α1_of_1, α2_of_1,
 
 
 
-def plot_F_equilibrium(paramvec, gxvecs, xvec, xlab, ylab, 
-                       ncol_legend = 1, xlim = None, ylim = None,
-                       fig = None, ax = None):
-    '''
-    Plots distribution g(x)
-    can take for gxvecs either g(x) or \bar{g}(x), 
-    the frequency of predators in groups of size x
-    OUTDATED?
-    returns fig, ax
-    '''
-    if ax == None:
-        fig, ax = plt.subplots(1,1)
-        
-    
-    
-    colors_x = ['r', 'orange', 'magenta', 'purple', 'blue', 'cornflowerblue', 'k']
 
-    xmax = len(xvec)
-    if gxvecs.shape[1] == xmax:
-        gxvecs = gxvecs.T
-        
-    for x in xvec:
-        if np.any(gxvecs[x-1]>1e-2):
-            ax.plot(paramvec, gxvecs[x-1], colors_x[x-1], label = r'$x=$%d'%x)
-    format_ax(ax,xlab,ylab, fs_labs = 18, fs_legend = 16, if_legend = True,
-             ncol_legend = ncol_legend)
-    return fig, ax
-    
-
-
-
-
-
-'''
-def generate_params_using_weitz(A1, β2, H2, η2, weight_fraction_prey, 
-                                α1_of_1 = 0.05, α2_of_1 = 0.95, s1 = 2, 
-                                s2 = 2, α2_fun_type = 'sigmoid', x_max = 10, 
-                                d = 10, Tx = .01):
-    attack_fraction = 1/(1/A1 - 1)
-    β1 = β2 * attack_fraction * weight_fraction_prey**(0.25)
-    H1 = H2 * attack_fraction * weight_fraction_prey**(0.25)
-    η1 = η2 * weight_fraction_prey**(-0.25)
-    params = dict(η1 = η1, η2 = η2, A1 = A1, β1 = β1, β2 = β2, 
-                   H1=H1, H2=H2, 
-                  α1_of_1=α1_of_1, α2_of_1=α2_of_1, 
-                  s1=s1, s2=s2, α2_fun_type = α2_fun_type,
-                  x_max = x_max, d = d,
-                 Tx = Tx, r = 0, γ = 0, pop_process = True)
-    return params
-'''
-    
-def plot_freq_x_eq(paramvec, gxvecs, xvec, Pvec, xlab, ylab = r'Freq$(x)$', 
-                       ncol_legend = 1, xlim = None, ylim = None,
-                       fig = None, ax = None):
-    '''
-    uses plot_F_equilibriumt o plot the frequency of each group size x
-    at the (coexistence) equilibrium over time
-
-    OUTDATED?
-    returns fig, ax
-    '''
-    prob_x = (xvec*gxvecs).T/Pvec
-    fig, ax = plot_F_equilibrium(paramvec, prob_x, xvec, xlab, ylab, 
-                       ncol_legend = ncol_legend, xlim = None, ylim = None,
-                       fig = None, ax = None)
-    return fig, ax
-
-
-def plot_W_mode_comparison(xvec,N1vec,N2vec,gxvecs, params, fig = None, ax = None):
-    '''
-    Plots W(x) for the mode of x, and for x=1, and the mode of x + 1
-    '''
-    if fig == None:
-        fig,ax = plt.subplots(1,1)
-    x_mode = np.argmax(xvec*gxvecs,1)+1
-    W_of_mode_x_plus_1 = per_capita_fitness_from_prey_non_dim(x_mode + 1, N1vec, N2vec, **params)
-    W_of_mode_x = per_capita_fitness_from_prey_non_dim(x_mode, N1vec, N2vec, **params)
-    W_of_1 = per_capita_fitness_from_prey_non_dim(1, N1vec, N2vec, **params)
-    ax.plot(β1vec, W_of_1, 'crimson', label = r'solitary')
-    ax.plot(β1vec, W_of_mode_x, 'magenta', label = r'mode$(x)$')
-    ax.plot(β1vec, W_of_mode_x_plus_1 - W_of_1, 'purple', label = r'mode$(x+1)$')
-
-    format_ax(ax, β1lab, 'Per Capita Fitness', if_legend = True)
-    return fig, ax
 def get_traj_plot_input(params, t_f = 1000, initial_points = None, 
                         num_init=2):
     '''
@@ -331,7 +308,7 @@ def get_traj_plot_input(params, t_f = 1000, initial_points = None,
         #out2 = solve_ivp(grp.full_model, [0, t_f], init_state, 
         #                 method = "LSODA", args = (True, params))
         # results  = get_results(out2, x_max) # T, N1, N2, P, g_of_x_vec, mean_x
-        results = bounded_ivp(init_state, params)
+        results = bounded_ivp(init_state, params, if_dict=True)
         trajectories.append(results)
     return trajectories # each in form T, N1, N2, p, g_of_x_vec, mean_x
 def plot_with_arrow(ax, x,y,i, label, start_ind):
@@ -344,7 +321,138 @@ def plot_with_arrow(ax, x,y,i, label, start_ind):
     if type(start_ind) == int:
         start_ind = [start_ind]
     for elt in start_ind:
-        add_arrow(l[0], start_ind = elt)      
+        add_arrow(l[0], start_ind = elt)   
+        
+
+def plot_trajectory(key_x, key_y, trajectories, xlab=None,
+                    ylab=None, start_inds=[50, 50, 50, 50],
+                    if_legend=False, g_x = None, g_y = None):
+    '''
+    Plots two state variables from a set of trajectories.
+
+    Args:
+        key_x (str): The key corresponding to the state variable to plot on the x-axis.
+        key_y (str): The key corresponding to the state variable to plot on the y-axis.
+        trajectories (list of dict): A list of dictionaries, where each dictionary represents a trajectory.
+            Each dictionary should have the state variables as keys, and their values as lists or arrays.
+        xlab (str, optional): Label for the x-axis. If not provided, uses `standard_labs[key_x]`.
+        ylab (str, optional): Label for the y-axis. If not provided, uses `standard_labs[key_y]`.
+        start_inds (list of int, optional): Indices indicating where to start plotting arrows for each trajectory.
+            Default is [50, 50, 50, 50].
+        if_legend (bool, optional): Whether to include a legend on the plot. Default is False.
+        g_x (integer, optional): The group size density to plot on the x axis
+        g_y (integer, optional): the group size density to plot on the y axis
+
+    Returns:
+        fig (matplotlib.figure.Figure): The figure object containing the plot.
+        ax (matplotlib.axes.Axes): The axes object for the plot.
+
+    Behavior:
+        - Iterates through the list of trajectories and plots the selected state variables.
+        - Labels the axes using either the provided `xlab` and `ylab` or default labels from `standard_labs`.
+        - Formats the axis using the `format_ax` function.
+        - Optionally includes a legend if `if_legend` is set to True.
+
+    Dependencies:
+        - `standard_labs`: A dictionary mapping state variable keys to their corresponding axis labels.
+        - `format_ax`: A custom function to format the axis.
+        - `plot_with_arrow`: A custom function to plot trajectories with arrows starting at specified indices.
+
+    Example Usage:
+        trajectories = [
+            {'N1': [0.1, 0.2, 0.3], 'N2': [0.4, 0.5, 0.6]},
+            {'N1': [0.2, 0.3, 0.4], 'N2': [0.5, 0.6, 0.7]}
+        ]
+        fig, ax = plot_trajectory('N1', 'N2', trajectories, xlab='Big Prey', ylab='Small Prey', if_legend=True)
+        fig.savefig("trajectory_plot.png")
+    '''
+    fig, ax = plt.subplots(1,1)
+
+    # set the label for the horizontal axis
+    if key_x == 'g':
+        if g_x == None:
+            print('Need a group size for horizontal axis')
+        xlab = gxlabel(g_x)
+    else:
+        xlab = standard_labs[key_x] if xlab == None else xlab
+        print(xlab)
+    
+    # set the label for the vertical axis
+    if key_y == 'g':
+        if g_y == None:
+            print('Need a group size for vertical axis')
+        ylab = gxlabel(g_y)
+    else:
+        ylab = standard_labs[key_y] if ylab == None else ylab
+
+            
+    for i, traj in enumerate(trajectories):
+        label = "Initial State %d"%i
+        # set the variables for the horizontal (x_var) and vertical axis (y_var)
+        x_var = traj['g'][g_x-1] if key_x == 'g' else traj[key_x]
+        y_var = traj['g'][g_y-1] if key_y == 'g' else traj[key_y]
+        # plot with arrows starting at start_inds
+        plot_with_arrow(
+            ax, x_var, y_var, i,
+                            label, start_inds[i])
+    format_ax(ax, xlab, ylab, if_legend = if_legend)
+    return fig, ax
+    
+def plot_trajectory_vs_T(key_y, trajectories, 
+                     ylab = None, if_legend = False, g_y = None):
+    '''
+    Plots a state variable versus scaled time from a set of trajectories.
+
+    Args:
+        key_y (str): The key corresponding to the state variable to plot on the y-axis. 
+                    If a group density, uses g_y to determine which one
+        trajectories (list of dict): A list of dictionaries, where each dictionary represents a trajectory.
+            Each dictionary should have the state variables as keys, and their values as lists or arrays.
+        ylab (str, optional): Label for the y-axis. If not provided, uses `standard_labs[key_y]`.
+        start_inds (list of int, optional): Indices indicating where to start arrows for each trajectory.
+            Default is [50, 50, 50, 50].
+        if_legend (bool, optional): Whether to include a legend on the plot. Default is False.
+        g_y (int, optional): group size of group density to plot
+    Returns:
+        fig (matplotlib.figure.Figure): The figure object containing the plot.
+        ax (matplotlib.axes.Axes): The axes object for the plot.
+
+    Behavior:
+        - Iterates through the list of trajectories and plots the selected state variable versus T.
+        - Labels the axes using either the provided ``ylab` or default labels from `standard_labs`.
+        - Formats the axis using the `format_ax` function.
+        - Optionally includes a legend if `if_legend` is set to True.
+
+    Dependencies:
+        - 'colors_x': a list of colors ['k', 'b', 'r', 'm']
+        - `standard_labs`: A dictionary mapping state variable keys to their corresponding axis labels.
+        - `format_ax`: A custom function to format the axis.
+
+    Example Usage:
+        trajectories = [
+            {'N1': [0.1, 0.2, 0.3], 'N2': [0.4, 0.5, 0.6]},
+            {'N1': [0.2, 0.3, 0.4], 'N2': [0.5, 0.6, 0.7]}
+        ]
+        fig, ax = plot_trajectory('N1', 'N2', trajectories, xlab='Big Prey', ylab='Small Prey', if_legend=True)
+        fig.savefig("trajectory_plot.png")
+    '''
+    fig, ax = plt.subplots(1,1)
+    # set the label for the vertical axis
+    if key_y == 'g':
+        if g_y == None:
+            print('Need a group size for vertical axis')
+        ylab = gxlabel(g_y)
+    else:
+        ylab = standard_labs[key_y] if ylab == None else ylab
+        
+    for i, traj in enumerate(trajectories):
+        y_var = traj['g'][g_y-1] if key_y == 'g' else traj[key_y]
+        label = "Initial State %d"%i
+        plt.plot(
+            traj['T'], y_var, colors_x[i], label = label
+        )
+    format_ax(ax, standard_labs['T'], ylab, if_legend = if_legend)
+    return fig, ax
 
 def make_traj_plots(params, t_f =1000, 
                grp_size1 = 2, grp_size2 = 3, start_inds = None,
@@ -367,30 +475,34 @@ def make_traj_plots(params, t_f =1000,
     figN, axN = plt.subplots(1,1) # N1 vs N2
     fig_g2, ax_g2 = plt.subplots(1,1) #g(1) vs g(2)
     fig_g3, ax_g3 = plt.subplots(1,1) #g(1) vs g(3)
+    fig_var, ax_var = plt.subplots(1,1) #variance vs T
     
     trajectories = get_traj_plot_input(params, t_f = t_f, 
                                        initial_points = initial_points,
                                        num_init = num_init)
     
     for i, traj in enumerate(trajectories):
-        T, N1, N2, P, g_of_x_vec, mean_x = traj
-        if np.any(np.isnan(mean_x)):
+        #T, N1, N2, P, g_of_x_vec, mean_x = traj
+        if np.any(np.isnan(traj['mean_x'])):
             print("oh no! mean x is nan")
-        elif  np.any(mean_x<0):
+        elif  np.any(traj['mean_x']<0):
             print("oh no! mean x is negative")
             print("i=%d"%i)
         # check 
         label = "Initial State %d"%i
-        plot_with_arrow(ax1, N1, mean_x,i,
+        plot_with_arrow(ax1, traj['N1'], traj['mean_x'],i,
                         label, start_inds[0][i])
-        plot_with_arrow(axN, N1, N2, i, 
+        plot_with_arrow(axN, traj['N1'], traj['N2'], i, 
                         label, start_inds[1][i])
         #g(1) vs g(grp_size1)
-        plot_with_arrow(ax_g2, g_of_x_vec[0], g_of_x_vec[grp_size1-1], i, 
+        plot_with_arrow(ax_g2, traj['g'][0], traj['g'][grp_size1-1], i, 
                         label, start_inds[2][i])
         #g(1) vs g(grp_size2)
-        plot_with_arrow(ax_g3, g_of_x_vec[0], g_of_x_vec[grp_size2 - 1], i, 
+        plot_with_arrow(ax_g3, traj['g'][0], traj['g'][grp_size2 - 1], i, 
                         label, start_inds[3][i])
+        # variance
+        ax_var.plot(traj['T'],traj['var'], colors_x[i], label = label)
+        #plot_with_arrow(ax_var, traj['T'],traj['var'], i, label
 
         #axN.plot(N1, N2, colors_x[i], label = label)
         #ax_g2.plot(g_of_x_vec[0], g_of_x_vec[1], colors_x[i], label = label)
@@ -401,4 +513,9 @@ def make_traj_plots(params, t_f =1000,
     format_ax(ax_g2, 'g(1)', 'g(%d)'%grp_size1, if_legend = if_legend)
     format_ax(ax_g3, 'g(1)', 'g(%d)'%grp_size2, if_legend = if_legend)
 
-    return fig1, figN, fig_g2, fig_g3
+    return fig1, figN, fig_g2, fig_g3, fig_var
+    
+    
+
+
+
