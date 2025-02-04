@@ -19,9 +19,28 @@ def fun_Jac(N1,N2,gvec,**params):
     Jac = np.zeros((size,size))
     Jac[0,:] = fun_grad_big_prey(N1, N2, gvec, grad_f_1, **params)
     Jac[1,:] = fun_grad_small_prey(N1, N2, gvec, grad_f_2, **params)
-    Jac[2:,:] = fun_Jac_groups(N1, N2, gvec, grad_f_1, grad_f_2, xvec, **params)
+    Jac[2:,:] = fun_Jac_groups_helper(N1, N2, gvec, grad_f_1, grad_f_2, xvec, **params)
 
     return Jac
+
+def fun_Jac_groups(N1, N2, gvec, params):
+    '''
+    Finds the Jacobian if N1, N2, p are constant
+    '''
+    x_max = params['x_max']
+    xvec = np.arange(1,x_max+1,1)
+
+    # the gradients of the functional responses relative to big prey and small prey
+    grad_f_1 = np.zeros((2,x_max))
+    grad_f_2 = np.zeros((2,x_max))
+
+
+    # the jacobian has two columns that need to be eliminated because they corrrespond to the gradient of dg/dt wrt N1, N2
+    Jac_need_to_trim = fun_Jac_groups_helper(N1, N2, gvec, grad_f1, grad_f_2, xvec, **params)
+
+    Jac = Jac[:, 2:]
+    return Jac
+    
     
 def fun_grad_func_response(i,x, N1,N2,H1,H2,A, **params):
     '''
@@ -75,7 +94,10 @@ def fun_grad_small_prey(N1,N2,gvec, grad_f_2, η2,  x_max, **params):
     to_return = np.array([delU2_N1, delU2_N2, *delU2_g])
 
     return to_return
-def fun_Jac_groups(N1, N2, gvec, grad_f_1, grad_f_2, xvec, x_max, Tx, d,
+
+
+    
+def fun_Jac_groups_helper(N1, N2, gvec, grad_f_1, grad_f_2, xvec, x_max, Tx, d,
                    η1, η2, **params):
     
     Jac = np.zeros((len(gvec),len(gvec)+2))
@@ -188,58 +210,7 @@ def fun_partial_S_wrt_prey(N1, N2, x, π_vec, fitnessvec, partial_π,
     
     return partial_S_1_x
     
-def fun_Jac_groups_nopop(N1, N2, gvec, x_max, Tx, d, **params):
-    '''
-    Finds the Jacobian for group dynamics with no populatin dynamics
-    '''
-    
-    Jac = np.zeros((len(gvec),len(gvec)+2))
-    
-    def g(x):
-        return gvec[x-1]
-    def S(x,y=1):
-        return best_response_fun_given_fitness(x,y,fitnessvec,d)
 
-        
-    # first row    
-    Q1_g1 = (-2*g(1)*S(2,1) - sum([g(x)*S(x+1,1) \
-                                       for x in range(2,x_max)]))/Tx 
-    Q1_g2 = (4*(1-S(2)) - g(1)*S(3))/Tx 
-    Q1_gx = [(x*(1-S(x)) - g(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
-    Q1_gxmax = x_max*(1 - S(x_max))/Tx 
-    Jac[0,:] = np.array([Q1_g1, Q1_g2, *Q1_gx, Q1_gxmax])
-
-    # second row
-    Q2_g = np.zeros(len(gvec))
-    Q2_g[0] = (1/Tx)* (g(1) * S(2) - g(2) * S(3)) # partial wrt g(1)
-    Q2_g[1] = -(1/Tx) * (2* (1 - S(2)) + g(1)*S(3)) 
-    Q2_g[2] = (3/Tx)*(1 - S(3)) 
-    
-    Jac[1,:] = Q2_g
-
-    # 3rd through 2nd to last row (for 2 < x < x_max)
-    
-    for x in range(3,x_max):
-        
-        Qx_g = np.zeros(len(gvec))
-        
-        Qx_g[0] = (1/Tx)* (g(x-1)*S(x) - g(x)*S(x+1)) # wrt g(1)
-        Qx_g[x-2] = (1/Tx) * g(1)*S(x) # wrt g(x-1)
-        Qx_g[x-1] = -(1/Tx) * (x*(1 - S(x)) + g(1)*S(x+1)) # wrt g(x)
-        Qx_g[x] = (1/Tx)*(x+1)*(1-S(x+1)) # wrt g(x+1)
-
-        Jac[x-1,:] = Qx_g
-
-
-
-    Qxmax_g = np.zeros(len(gvec))
-    Qxmax_g[0] = (1/Tx)*g(x_max-1)*S(x_max,1)
-    Qxmax_g[x_max-2] = (1/Tx)*g(1)*S(x_max,1)  # wrt g(x-1)
-    Qxmax_g[x_max-1] = -(1/Tx)*x_max*S(1,x_max) 
-    Jac[-1,:] = Qxmax_g
-                                           
-    
-    return Jac
         
 
 
@@ -313,3 +284,58 @@ def classify_equilibrium(equilibrium, params):
     
 #     return J
 
+''' 
+this needs to be fixed: 
+'''
+def fun_Jac_groups_nopop(N1, N2, gvec, x_max, Tx, d, **params):
+    '''
+    Finds the Jacobian for group dynamics with no populatin dynamics
+    '''
+    
+    Jac = np.zeros((len(gvec),len(gvec)+2))
+    
+    def g(x):
+        return gvec[x-1]
+    def S(x,y=1):
+        return best_response_fun_given_fitness(x,y,fitnessvec,d)
+
+        
+    # first row    
+    Q1_g1 = (-2*g(1)*S(2,1) - sum([g(x)*S(x+1,1) \
+                                       for x in range(2,x_max)]))/Tx 
+    Q1_g2 = (4*(1-S(2)) - g(1)*S(3))/Tx 
+    Q1_gx = [(x*(1-S(x)) - g(1)*S(x+1))/Tx for x in range(3,x_max)] #FILL IN
+    Q1_gxmax = x_max*(1 - S(x_max))/Tx 
+    Jac[0,:] = np.array([Q1_g1, Q1_g2, *Q1_gx, Q1_gxmax])
+
+    # second row
+    Q2_g = np.zeros(len(gvec))
+    Q2_g[0] = (1/Tx)* (g(1) * S(2) - g(2) * S(3)) # partial wrt g(1)
+    Q2_g[1] = -(1/Tx) * (2* (1 - S(2)) + g(1)*S(3)) 
+    Q2_g[2] = (3/Tx)*(1 - S(3)) 
+    
+    Jac[1,:] = Q2_g
+
+    # 3rd through 2nd to last row (for 2 < x < x_max)
+    
+    for x in range(3,x_max):
+        
+        Qx_g = np.zeros(len(gvec))
+        
+        Qx_g[0] = (1/Tx)* (g(x-1)*S(x) - g(x)*S(x+1)) # wrt g(1)
+        Qx_g[x-2] = (1/Tx) * g(1)*S(x) # wrt g(x-1)
+        Qx_g[x-1] = -(1/Tx) * (x*(1 - S(x)) + g(1)*S(x+1)) # wrt g(x)
+        Qx_g[x] = (1/Tx)*(x+1)*(1-S(x+1)) # wrt g(x+1)
+
+        Jac[x-1,:] = Qx_g
+
+
+
+    Qxmax_g = np.zeros(len(gvec))
+    Qxmax_g[0] = (1/Tx)*g(x_max-1)*S(x_max,1)
+    Qxmax_g[x_max-2] = (1/Tx)*g(1)*S(x_max,1)  # wrt g(x-1)
+    Qxmax_g[x_max-1] = -(1/Tx)*x_max*S(1,x_max) 
+    Jac[-1,:] = Qxmax_g
+                                           
+    
+    return Jac

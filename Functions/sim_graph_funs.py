@@ -42,6 +42,24 @@ standard_labs = dict(
 figure_ops = dict(bbox_inches = 'tight', 
                   format = 'eps', dpi=300, transparent=False,
                  pad_inches=0)
+
+param_lab_dic = dict(η1 = "Growth of big prey, " + r'$\eta_1$', 
+                η2 = "Growth of small prey, " + r'$\eta_1$', 
+                A = "Relative attack rates, " + r'$A$', 
+                β1 = "Benefit of big prey, " + r'$\beta_1$',
+                β2 = "Benefit of small prey, " + r'$\beta_1$', 
+                H1= "Handling time of big prey, " + r'$H_1$', 
+                H2= "Handling time of small prey," + r'$H_2$', 
+                α1_of_1= "Capture probability of big prey\nby solitary predator, " + r'$\alpha_1(1)$',
+                α2_of_1="Capture probability of small prey\nby solitary predator, " + r'$\alpha_2(1)$', 
+                s1="Critical group size for big prey, " + r'$s_1$', 
+                s2="Critical group size for small prey, " + r'$s_2$', 
+                α2_fun_type = 'Shape of capture probability for small prey',
+                x_max = 'Max group size, ' + r'$x_{max}$',
+                d = "Decision accuracy, " + r'$d$',
+                Tx = "Timescale of group dynamics, " + r'$T_x$',
+                scale = "Prey size ratio, " + r'$\beta_1/\beta_2$')
+
 def get_initial_points(num_initial, x_max, p_upper = None, **params):
     ''' 
     get initial points to feed to the root finder 
@@ -295,7 +313,7 @@ def print_param_caption(Tx, η1, η2, A, β1, β2, H1, H2, α1_of_1, α2_of_1,
 
 
 def get_traj_plot_input(params, t_f = 1000, initial_points = None, 
-                        num_init=2):
+                        num_init=4):
     '''
     initial_points is either none (so generates initial points) 
     or a list of up to 4 points, each of form [N1,N2, g(1), g(2), ..., g(xm)]
@@ -310,12 +328,13 @@ def get_traj_plot_input(params, t_f = 1000, initial_points = None,
         # results  = get_results(out2, x_max) # T, N1, N2, P, g_of_x_vec, mean_x
         results = bounded_ivp(init_state, params, if_dict=True)
         trajectories.append(results)
-    return trajectories # each in form T, N1, N2, p, g_of_x_vec, mean_x
+    return trajectories # each is a dictionary
 def plot_with_arrow(ax, x,y,i, label, start_ind):
     l = ax.plot(x,y,colors_x[i], label = label)
     line_zorder = l[0].get_zorder()
-    ax.scatter(x[-1],y[-1],c='orange', 
-               marker = "*", s = 100, zorder=line_zorder+1)
+    if np.all(np.abs([x[-1] - x[-2], y[-1]-y[-2]])<1e-6):
+        ax.scatter(x[-1],y[-1],c='orange', 
+                   marker = "*", s = 100, zorder=line_zorder+1)
 
     #plot arrows
     if type(start_ind) == int:
@@ -459,12 +478,22 @@ def make_traj_plots(params, t_f =1000,
               initial_points = None, num_init = 4,
                    if_legend = False):
     '''
+    Plots trajectories from four initial plots, and plots on the trajectories four different projections: 
+        1. N1 vs mean experienced group size
+        2. N1 vs N2
+        3. g(1) vs g(grp_size1)
+        4. g(1) vs g(grp_size2)
+        5. variance vs time
     initial points: list of initial points of form [N1, N2, g(1), g(2), ..., g(x_max)]
-    params: params dictionary
-    t_f: final time point for solve_ivp simulation
-    grp_size1: group size on y axis of ax_g2
-    grp_size2: group size for y axis of ax_g3
-    start_inds: start index for arrow on plots in ax1, axN, ax_g2, ax_g3
+    Arguments
+    - params: params dictionary
+    - t_f: final time point for solve_ivp simulation
+    - grp_size1: group size on y axis of ax_g2
+    - grp_size2: group size for y axis of ax_g3
+    - start_inds: start index for arrow on plots in ax1, axN, ax_g2, ax_g3
+
+    Returns
+    (tuple) fig1, figN, fig_g2, fig_g3, fig_var
     '''
 
     if start_inds == None:
