@@ -330,6 +330,36 @@ def get_traj_plot_input(params, t_f = 1000, initial_points = None,
         trajectories.append(results)
     return trajectories # each is a dictionary
 def plot_with_arrow(ax, x,y,i, label, start_ind):
+    """
+    Plots a line on the given axis with optional arrows and a marker for the endpoint.
+
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        The axis on which to plot the line.
+    x : array-like
+        X-coordinates of the data points.
+    y : array-like
+        Y-coordinates of the data points.
+    i : int
+        Index for selecting the color from `colors_x`.
+    label : str
+        Label for the plotted line.
+    start_ind : int or list of int
+        Index (or indices) indicating where to place arrows along the line.
+
+    Behavior:
+    ---------
+    - Plots the line with the specified color and label.
+    - If the last two points are very close (within 1e-6 tolerance), marks the endpoint with an orange star.
+    - Adds arrows at the specified indices to indicate directionality.
+
+    Notes:
+    ------
+    - The function assumes `colors_x` is a predefined list of colors.
+    - Calls `add_arrow()` to add arrows to the plot.
+
+    """
     l = ax.plot(x,y,colors_x[i], label = label)
     line_zorder = l[0].get_zorder()
     if np.all(np.abs([x[-1] - x[-2], y[-1]-y[-2]])<1e-6):
