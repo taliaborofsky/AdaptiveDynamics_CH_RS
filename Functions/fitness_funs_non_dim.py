@@ -2,13 +2,19 @@ import numpy as np
 import scipy as sp
 # this is written and tested in write_test_pop_dynamics.ipynb
 
+def fun_H1(x, H1a, H1b, **params):
+    return H1a + H1b/x
+def fun_H2(x, H2a, H2b, **params):
+    return H2a + H2b/x
 def fun_alpha1(x, α1_of_1, s1, **params):
     ''' capture prob of big prey'''
     θ_1 = - np.log(1/α1_of_1 - 1)/(1-s1)
     return 1/(1 + np.exp(- θ_1 * (x - s1)))
     
 def fun_alpha2(x, α2_fun_type, α2_of_1, s2, **params):
-    ''' capture prob of small prey'''
+    ''' 
+    capture prob of small prey
+    '''
     if α2_fun_type == 'constant':
         return α2_of_1
     else:
@@ -17,9 +23,11 @@ def fun_alpha2(x, α2_fun_type, α2_of_1, s2, **params):
 
 def fun_f1(x,N1,N2,**params):
     return fun_response_non_dim(x,N1,N2,1,**params)
+    
 def fun_f2(x,N1,N2,**params):
     return fun_response_non_dim(x,N1,N2,2,**params)
-def fun_response_non_dim(x, N1, N2, index, A, H1, H2, **params):
+    
+def fun_response_non_dim(x, N1, N2, index, A1, A2, **params):
     '''
     non-dimensionalized functional response to prey as a function of predator group size (x) and 
     (non-dimensionalized prey population sizes (N1, N2)
@@ -28,7 +36,7 @@ def fun_response_non_dim(x, N1, N2, index, A, H1, H2, **params):
     x - pred group size
     N1, N2 - non-dim big prey and small prey pop sizes, respec
     index - 1 (big prey) or 2 (small prey)
-    A - non-dimensionalized encounter rate of both types of prey
+    A1, A2 - non-dimensionalized encounter rate of both types of prey
     H1, H2 - non-dimensionalized handling times of big prey, small prey, respec
     params: a dictionary of other parameters, that at least must include 
                 α1_of_1, α2_of_1, s1, s2
@@ -36,20 +44,17 @@ def fun_response_non_dim(x, N1, N2, index, A, H1, H2, **params):
     @returns
     functional response for prey type <index> (a float)
 
-    @examples
-    >>fun_response_non_dim(x=1,N1=0.8,N2=0.8,index=1,a=1,H1=5,H2=5, 
-                    **dict(α1_of_1 = 0.05, α2_of_1 = 0.95, s1 = 2, s2 = 2) )
-    0.008000000000000002
     '''
-    
+    H1 = fun_H1(x, **params)
+    H2 = fun_H2(x, **params)
     α2 = fun_alpha2(x,**params)
     α1 = fun_alpha1(x,**params)
     if index == 1:
-        numerator = α1*N1
+        numerator = A1*α1*N1
     elif index == 2:
-        numerator = α2*N2
-    denominator = 1 + α1*H1*N1/x + α2*H2*N2/x
-    return A*numerator/denominator
+        numerator = A2*α2*N2
+    denominator = 1 + α1*H1*N1 + α2*H2*N2
+    return numerator/denominator
 def yield_from_prey_non_dim(x,N1,N2,β1, β2, **params):
     '''
     this is \tilde{pi} in the model, which is pi/(g1 + g2 + delta)
@@ -61,6 +66,7 @@ def yield_from_prey_non_dim(x,N1,N2,β1, β2, **params):
     tilde_π = β1 * fun_response_non_dim(x, N1, N2, 1,**params) \
                           + β2 * fun_response_non_dim(x, N1, N2, 2, **params)
     return tilde_π
+    
 def per_capita_fitness_from_prey_non_dim(x, N1, N2, β1, β2, **params):
     '''
     This is \tilde{w} in the model
@@ -72,6 +78,10 @@ def per_capita_fitness_from_prey_non_dim(x, N1, N2, β1, β2, **params):
     w_per_capita = (1/x)*(β1 * fun_response_non_dim(x, N1, N2, 1,**params) \
                           + β2 * fun_response_non_dim(x, N1, N2, 2, **params))
     return w_per_capita
+
+'''
+I don't use the following functions anymore
+'''
     
 def fitness_from_prey_non_dim(x, N1, N2, r, γ,**params):
     '''

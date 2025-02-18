@@ -42,7 +42,7 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
         else:
             return 0
     def fun_deaths(x):
-        return tildeδ * Tx * ( - x * g(x) + (x+1) * g(x+1) )
+        return tildeδ * ( - x * g(x) + (x+1) * g(x+1) )
     def D(x):
         # rate of leaving/dispersing
         return x*S(1,x) if x <= x_max else 0
@@ -58,7 +58,7 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
         π_vec = yield_from_prey_non_dim(xvec, N1, N2, **params) #would fitnessvec*xvec also work...?
         births_vec = Tx*g_of_x_vec[:-1]* π_vec
         births_vec = np.append(births_vec,0) # so can calculate births at x_max
-        deaths_vec = [fun_deaths(x) for x in range(1,x_max+1)]
+        deaths_vec = Tx * np.array([fun_deaths(x) for x in range(1,x_max+1)])
     else:
         π_vec = np.zeros(fitnessvec.shape)
         births_vec = π_vec.copy()
@@ -347,7 +347,6 @@ def bounded_ivp(y0,params, t_f = 1000, if_dict = False):
     g_of_x_vec = y_trajectory[2:] #dimensions x_max x T
     xvec = np.arange(1,x_max+1,1)[:,np.newaxis]
     p = np.sum(xvec*g_of_x_vec,0)
-    v = var_of_experienced_grp_size(g_of_x_vec)
     mean_x = mean_group_size_membership(g_of_x_vec.T, x_max, p)
     var_exp_x = var_of_experienced_grp_size(g_of_x_vec)
     if if_dict:
@@ -362,15 +361,15 @@ def bounded_ivp(y0,params, t_f = 1000, if_dict = False):
     
 def transformed_model(T, u0, arg, params):
     #For issue where need solve_ivp to keep some variable y s.t y > 0.
-    # Soln from stack exchange: 
+    # Soln from stack exchange: https://stackoverflow.com/questions/67487208/bounds-for-solve-ivp-integration
     # Alternatively, replace the density with y=a*exp(b*u) with sensibly chosen values for a and b, 
     # then du/dt = dy/dt/(b*y). 
     # Then g cannot become negative
     a = 1; b = 1
-    y0 = a * np.exp(b*u0)
-    y_ = full_model(T,y0, arg, params)
+    y0 = a * np.exp(b*u0) # transform back into original coordinates
+    y_ = full_model(T,y0, arg, params) # find derivative
     y_ = np.array(y_)
-    u_ = y_/(b*y0)
+    u_ = y_/(b*y0) # find derivative of transformed coordinates
     return u_
 
 def var_of_experienced_grp_size(group_densities, epsilon=1e-12):   
@@ -411,7 +410,58 @@ def var_of_experienced_grp_size(group_densities, epsilon=1e-12):
     # Variance = E[X^2] - (E[X])^2
     variance = mean_x_squared - (mean_exp_x**2)
     return variance
+
+def get_initial_points(num_initial, x_max, p_upper = None, **params):
+    ''' 
+    get initial points to feed to the root finder 
+    '''
+    # α2_1 = params['α2_of_1']
+    # α1_xm = fun_alpha1(x_max, **params)
+
+    # Generate random values for N1, N2, and g(x) for each initial point
+    np.random.seed(42)
     
+    # N1 and N2 are between 0 and 1, not including 0
+    N1_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
+    N2_values = np.random.uniform(0.01, 1, num_initial)  # Shape: (num_initial,)
+
+    if p_upper == None:
+        gx_upper = 3# try this out
+        # g(x) is between 0 and gx_upper for each x = 1, 2, ..., x_max
+        g_values = np.random.uniform(0.01, gx_upper, (num_initial, x_max))  # Shape: (num_initial, x_max)
+    else:
+        g_values = get_random_g_bounded_p(p_upper, num_initial, x_max)
+                                          
+    # Combine N1, N2, and g(x) into a single array
+    initial_points = np.hstack((N1_values[:, np.newaxis],  # Add N1 as the first column
+                                N2_values[:, np.newaxis],  # Add N2 as the second column
+                                g_values))  # Add g(x) as the remaining columns
+    
+    return initial_points
+def update_params(param_key, param, params_base):
+    '''
+    given params_base, makes a copy dictionary of parameters
+    and updates with the new param at param_key
+
+    noe if param_key is scale, updates β1 and H1 entries
+
+    @ returns: params
+    '''
+    params = params_base.copy()
+        
+    if param_key == "scale": # this means β1/β2 = H1/H2 and β2, H2 are set
+        params['β1'] = params['β2']*param
+        A_frac = params_base['A1']/params_base['A2']
+        params['H1a'] = params['H2a'] * param * A_frac
+        params['H1b'] = params['H2b'] * param * A_frac
+        params['η1'] = params['η2']/param
+    else:
+        params[param_key] = param
+
+        if "scale" in params:
+            params = update_params("scale", params["scale"], params) # make sure everything still scaled correctly
+                
+    return params
 def get_list_of_trajectories(params, t_f=1000, initial_points=None, num_init=4):
     '''
     Generates a list of trajectories by simulating the system from a set of initial conditions.
@@ -436,22 +486,6 @@ def get_list_of_trajectories(params, t_f=1000, initial_points=None, num_init=4):
     Dependencies:
         - `get_initial_points`: Function to generate initial points if not provided.
         - `bounded_ivp`: Function that simulates the system and returns a trajectory as a dictionary.
-
-    Example Usage:
-        params = {
-            'η1': 0.2, 'η2': 0.5, 'A': 0.5, 'β1': 8, 'β2': 1,
-            'H1': 0, 'H2': 0, 'α1_of_1': 0.05, 'α2_of_1': 0.95,
-            's1': 2, 's2': 2, 'α2_fun_type': 'constant', 'x_max': 5,
-            'd': 10, 'Tx': 0.01, 'pop_process': True
-        }
-
-        # Generate trajectories
-        trajectories = get_list_of_trajectories(params, t_f=1000, num_init=4)
-
-        # Access the first trajectory
-        first_traj = trajectories[0]
-        print(first_traj['T'])  # Time points
-        print(first_traj['N1'])  # Big prey densities
     '''
     if type(initial_points) != np.ndarray: # so it's None or some invalid entry
         print("generating initial points")
@@ -461,3 +495,44 @@ def get_list_of_trajectories(params, t_f=1000, initial_points=None, num_init=4):
         results = bounded_ivp(init_state, params, if_dict=True)
         trajectories.append(results)
     return trajectories # each is a dictionary
+
+def get_random_g_bounded_p(p_upper, num_initial, x_max):
+    """
+    Generates random g values such that sum(x * g(x)) <= p_upper.
+    Repeats the process until num_initial valid g vectors are obtained.
+    
+    Args:
+        p_upper (float): Upper bound for the sum(x * g(x)).
+        num_initial (int): Desired number of valid g vectors.
+        x_max (int): Maximum group size.
+
+    Returns:
+        np.ndarray: An array of shape (num_initial, x_max) containing valid g vectors.
+    """
+    g_list = []
+    while len(g_list) < num_initial:
+        g_mat = np.zeros((num_initial, x_max))
+        preds_left = p_upper * np.ones(num_initial)  # Track remaining predator allocation for each vector
+        
+        for x in range(1, x_max + 1):
+            gi = np.random.uniform(0.01, preds_left / x, num_initial)
+            g_mat[:, x - 1] = gi
+            
+            # Update current predator population
+            preds_left -= x * gi
+            preds_left[preds_left < 0] = 0  # Ensure no negative remaining capacity
+    
+        # Calculate total population p for each g vector
+        p_vals = np.sum(g_mat * np.arange(1, x_max + 1), axis=1)
+        
+        # Filter valid g vectors where total population <= p_upper
+        valid_indices = np.where(p_vals <= p_upper)[0]
+        valid_g = g_mat[valid_indices]
+        
+        # Add valid g vectors to the list
+        g_list.extend(valid_g.tolist())
+
+    # Limit the result to exactly num_initial vectors
+    g_good = np.array(g_list[:num_initial])
+
+    return g_good

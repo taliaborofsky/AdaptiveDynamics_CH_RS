@@ -42,20 +42,22 @@ def fun_Jac_groups(N1, N2, gvec, params):
     return Jac
     
     
-def fun_grad_func_response(i,x, N1,N2,H1,H2,A, **params):
+def fun_grad_func_response(i,x, N1,N2, A1, A2, **params):
     '''
     The gradient of the (scaled) functional response on prey i wrt N1, N2
     returns an array with 2 rows (N1, N2) and x_max columns
     '''
     alpha1 = fun_alpha1(x,**params)
     alpha2 = fun_alpha2(x,**params)
-    denom = (1 + alpha1 * H1 * N1/x + alpha2 * H2 * N2/x)**2
+    H1 = fun_H1(x,**params)
+    H2 = fun_H2(x,**params)
+    denom = (1 + alpha1 * H1 * N1 + alpha2 * N2 * H2)**2
     if i == 1:
-        return A*np.array([ alpha1*(1 + alpha2 * H2 * N2/x), 
-                         - alpha1 * alpha2 * H2 * N1/x])/denom
+        return np.array([ A1 * alpha1*(1 + alpha2 * H2 * N2), 
+                         - A1 * alpha1 * alpha2 * H2 * N1])/denom
     elif i == 2:
-        return A*np.array([ - alpha1 * alpha2 * H1 * N2/x,
-                         alpha2 * (1 + alpha1 * H1 * N1/x)])/denom
+        return np.array([ - A2 * alpha1 * alpha2 * H1 * N2,
+                         A2 * alpha2 * (1 + alpha1 * H1 * N1)])/denom
 
 def fun_grad_big_prey(N1,N2,gvec, grad_f_1, η1, x_max, **params):
     '''

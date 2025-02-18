@@ -11,7 +11,29 @@ from equilibria_funs import *
 from sim_graph_funs import *
 from matplotlib.lines import Line2D
 
+param_lab_dic = dict(η1 = "Growth of big prey, " + r'$\eta_1$', 
+            η2 = "Growth of small prey, " + r'$\eta_1$', 
+            A = "Relative Attack Rate of Both prey," + r'$A_1=A_2=A$',
+            A1 = "Relative Attack rate of Big Prey, " + r'$A_1$', 
+            A2 = "Relative Attack rate of Small Prey, " + r'$A_1$', 
+            β1 = "Benefit of big prey, " + r'$\beta_1$',
+            β2 = "Benefit of small prey, " + r'$\beta_1$', 
+            H1a= "Group-independent Handling\ntime of big prey, " + r'$H_{1a}$', 
+            H2a= "Group-independent Handling\ntime of small prey," + r'$H_{2a}$', 
+            H1b= "Group-dependent Handling\ntime of big prey, " + r'$H_{1b}$', 
+            H2b= "Group-dependent Handling\ntime of small prey," + r'$H_{2b}$', 
+            α1_of_1= "Capture probability of big prey\nby solitary predator, " + r'$\alpha_1(1)$',
+            α2_of_1="Capture probability of small prey\nby solitary predator, " + r'$\alpha_2(1)$', 
+            s1="Critical group size for big prey, " + r'$s_1$', 
+            s2="Critical group size for small prey, " + r'$s_2$', 
+            α2_fun_type = 'Shape of capture probability for small prey',
+            x_max = 'Max group size, ' + r'$x_{max}$',
+            d = "Decision accuracy, " + r'$d$',
+            Tx = "Timescale of group dynamics, " + r'$T_x$',
+            scale = "Prey size ratio, " + r'$\beta_1/\beta_2$')
 
+
+    
 
 def get_perturbations(equilibrium, num, strength):
     '''
@@ -47,7 +69,7 @@ def make_equilibria_dataframe(rows, param_key, x_max):
     # Define the column names
     columns = [param_key, 'N1', 'N2'] + \
               [f'g{i}' for i in range(1, x_max + 1)] + \
-              ['p','mean_x', 'var', 'equilibrium_type', 'stability']
+              ['mean_x', 'var', 'equilibrium_type', 'stability']
     
     # Initialize the DataFrame with specific dtypes
     dtype_dict = {col: 'float64' for col in columns[:-2]}  # All numeric columns
@@ -84,7 +106,7 @@ def store_and_perturb(rows, equilibria, num_perturbations, perturb_strength, par
             stability = classify_equilibrium(equilibrium, params) 
             
             # Prepare row for DataFrame
-            row = [param, *equilibrium, eq_dic['p'], eq_dic['mean_x'], eq_dic['var'],
+            row = [param, *equilibrium, eq_dic['mean_x'], eq_dic['var'],
                    equilibrium_type, stability]
             rows.append(row)
     return rows, perturbed_pts
@@ -102,7 +124,7 @@ def get_prey_extinct_equilibria(param_key, param_vec, i, num_init = 10,
     rows = []
 
     # get random initial points
-    init_pts0= get_initial_points(num_initial=num_init,**params_base.copy())
+    init_pts0= get_initial_points(num_initial=num_init,**params_base.copy(), p_upper=3)
 
     for param in param_vec:
         # Update param dictionary
@@ -166,6 +188,17 @@ def get_coexistence_equilibria(param_key, param_vec, num_init=10,
         # Classify stability and store equilibria
         rows, perturbed_pts = store_and_perturb(rows, coexist_equilibria, num_perturbations, 
                                                 perturb_strength, params, param, 'Coexistence')
+        # if np.size(coexist_equilibria) > 0:
+        #     for eq_dic in coexist_equilibria:
+        #         equilibrium = eq_dic['equilibrium']
+        #         perturbed_pts = get_perturbations(equilibrium, 
+        #                                           num_perturbations, perturb_strength)
+        #         stability = classify_equilibrium(equilibrium, params) 
+                
+        #         # Prepare row for DataFrame
+        #         row = [param, *equilibrium, eq_dic['mean_x'], eq_dic['var'],
+        #                'Coexistence', stability]
+        #         rows.append(row)
 
 
     
@@ -195,7 +228,7 @@ def get_predator_extinct_equilibria(param_key, param_vec, params_base):
             # Prepare row for DataFrame
             mean_x = 1
             var = 0
-            row = [param, *equilibrium, 0, mean_x, var,
+            row = [param, *equilibrium, mean_x, var,
                        'Predator Extinct', stability]
             rows.append(row)
     return(rows)
@@ -251,39 +284,7 @@ def get_bif_input(param_key, param_vec, params_base, num_init = 10,
     # add all rows to a DataFrame
     df = make_equilibria_dataframe(rows, param_key, params_base['x_max'])
     return df
-
-def plot_bif_diagram(param_key, y_col_name, df, ylab = None):
-    fig, ax = plt.subplots(1,1)
-    color_map = {
-        'Coexistence': 'black',
-        'Predator Extinct': 'blue',
-        'Big Prey Extinct': 'red',
-        'Small Prey Extinct': 'cyan'
-    }
-    stable_markers = dict(label = "Stable ", marker = "o", s = 5)
-    unstable_markers = dict(label = "Unstable ", marker = 'D', 
-                            s = 30, facecolors='none')
-    marker_map = {
-        "Stable (attractive)": stable_markers,    # Filled circle
-        "Unstable": unstable_markers   # Open diamond
-    }
-
-    for (equilibrium_type, stability), group in df.groupby(['equilibrium_type', 
-                                                        'stability']):
-        color = color_map.get(equilibrium_type, 'gray')  # Default to gray if unknown type
-        marker_dict = marker_map.get(stability, 'x')         # Default to 'x' if unknown stability
-        ax.scatter(
-                group[param_key], group[y_col_name],
-                color=color, **marker_dict
-            )
-    xlab = param_lab_dic[param_key]
-    if ylab == None:
-        ylab = standard_labs[y_col_name]
-        
-    format_ax(ax,xlab,ylab, xlim = None, ylim=None,
-              fs_labs = 20, if_legend = False)
-    return fig
-        
+    
 def plot_bif_diagrams(param_key, df):
     '''
     Generate and plot a bifurcation diagram for the system.

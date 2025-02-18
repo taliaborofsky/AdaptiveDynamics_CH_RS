@@ -32,7 +32,7 @@ def gxlabel(i):
     else:
         return "Density of groups\n of size %d, "%i + r'$g($' + str(i) + r'$)'
 standard_labs = dict(
-    p = r'$p$,  Pred. Density', N1 = r'$N_1$, Scaled Big Prey'+ '\nDensity', 
+    P = r'$P$,  Pred. Scaled Density', N1 = r'$N_1$, Scaled Big Prey'+ '\nDensity', 
     N2 = r'$N_2$, Scaled Small Prey' + '\nDensity', T = r'$T$, Scaled time',
     mean_x = "Mean Experienced\nGroup Size",
     freq_x = r'Freq$(x)$', β1 = r'$\beta_1$', gx = r'g$(x)$', 
@@ -44,25 +44,21 @@ figure_ops = dict(bbox_inches = 'tight',
                  pad_inches=0)
 
 param_lab_dic = dict(η1 = "Growth of big prey, " + r'$\eta_1$', 
-            η2 = "Growth of small prey, " + r'$\eta_2$', 
-            A = "Relative Attack Rate of Both prey," + r'$A_1=A_2=A$',
-            A1 = "Relative Attack rate of Big Prey, " + r'$A_1$', 
-            A2 = "Relative Attack rate of Small Prey, " + r'$A_1$', 
-            β1 = "Benefit of big prey, " + r'$\beta_1$',
-            β2 = "Benefit of small prey, " + r'$\beta_1$', 
-            H1a= "Group-independent Handling\ntime of big prey, " + r'$H_{1a}$', 
-            H2a= "Group-independent Handling\ntime of small prey," + r'$H_{2a}$', 
-            H1b= "Group-dependent Handling\ntime of big prey, " + r'$H_{1b}$', 
-            H2b= "Group-dependent Handling\ntime of small prey," + r'$H_{2b}$', 
-            α1_of_1= "Capture probability of big prey\nby solitary predator, " + r'$\alpha_1(1)$',
-            α2_of_1="Capture probability of small prey\nby solitary predator, " + r'$\alpha_2(1)$', 
-            s1="Critical group size for big prey, " + r'$s_1$', 
-            s2="Critical group size for small prey, " + r'$s_2$', 
-            α2_fun_type = 'Shape of capture probability for small prey',
-            x_max = 'Max group size, ' + r'$x_{max}$',
-            d = "Decision accuracy, " + r'$d$',
-            Tx = "Timescale of group dynamics, " + r'$T_x$',
-            scale = "Prey size ratio, " + r'$\beta_1/\beta_2$')
+                η2 = "Growth of small prey, " + r'$\eta_1$', 
+                A = "Relative attack rates, " + r'$A$', 
+                β1 = "Benefit of big prey, " + r'$\beta_1$',
+                β2 = "Benefit of small prey, " + r'$\beta_1$', 
+                H1= "Handling time of big prey, " + r'$H_1$', 
+                H2= "Handling time of small prey," + r'$H_2$', 
+                α1_of_1= "Capture probability of big prey\nby solitary predator, " + r'$\alpha_1(1)$',
+                α2_of_1="Capture probability of small prey\nby solitary predator, " + r'$\alpha_2(1)$', 
+                s1="Critical group size for big prey, " + r'$s_1$', 
+                s2="Critical group size for small prey, " + r'$s_2$', 
+                α2_fun_type = 'Shape of capture probability for small prey',
+                x_max = 'Max group size, ' + r'$x_{max}$',
+                d = "Decision accuracy, " + r'$d$',
+                Tx = "Timescale of group dynamics, " + r'$T_x$',
+                scale = "Prey size ratio, " + r'$\beta_1/\beta_2$')
 
 
 
@@ -211,8 +207,7 @@ def plot_portion_x(fig, ax, out, x_max, xlim = [-1,500], ncol_legend = 1):
               fs_labs = 20, fs_legend = 16, if_legend = True, ncol_legend = ncol_legend)
     return fig, ax
 
-def print_param_caption(Tx, η1, η2, A1, A2, β1, β2, H1a, H1b, H2a, H2b,
-                        α1_of_1, α2_of_1, 
+def print_param_caption(Tx, η1, η2, A, β1, β2, H1, H2, α1_of_1, α2_of_1, 
                         s1, s2, α2_fun_type,**params):
     '''
     Prints parameter caption in latex format
@@ -220,9 +215,8 @@ def print_param_caption(Tx, η1, η2, A1, A2, β1, β2, H1a, H1b, H2a, H2b,
     '''
     caption = 'The parameters are '
     caption += f'$\\eta_1 = {η1}, \\eta_2 = {η2}, '
-    caption += f'A_ 1= {A1}, A_2= {A2}, \\beta_1 = {β1}, \\beta_2 = {β2}, '
-    caption += 'H_{1a} =' +f'{H1a}, ' 'H_{1b} =' + f'{H1b}, '
-    caption += 'H_{2a}' +f' = {H2a}, ' + 'H_{2b}' + f'{H2b}, T_x = {Tx}, ' 
+    caption += f'A = {A}, \\beta_1 = {β1}, \\beta_2 = {β2}, '
+    caption += f'H_1 = {H1}, H_2 = {H2}, T_x = {Tx}, ' 
     if α2_fun_type == 'constant':
         caption += f'\\alpha_1(1) = {α1_of_1}, s_1 ={s1}$, '
         caption += f'and $\\alpha_2(x) = {α2_of_1}$ is constant.'
@@ -250,7 +244,7 @@ def get_traj_plot_input(params, t_f = 1000, initial_points = None,
         #out2 = solve_ivp(grp.full_model, [0, t_f], init_state, 
         #                 method = "LSODA", args = (True, params))
         # results  = get_results(out2, x_max) # T, N1, N2, P, g_of_x_vec, mean_x
-        results = bounded_ivp(init_state, params, t_f = t_f, if_dict=True)
+        results = bounded_ivp(init_state, params, if_dict=True)
         trajectories.append(results)
     return trajectories # each is a dictionary
 def plot_with_arrow(ax, x,y,i, label, start_ind):
@@ -287,7 +281,7 @@ def plot_with_arrow(ax, x,y,i, label, start_ind):
     l = ax.plot(x,y,colors_x[i], label = label)
     line_zorder = l[0].get_zorder()
     if np.all(np.abs([x[-1] - x[-2], y[-1]-y[-2]])<1e-6):
-        ax.scatter(x[-1],y[-1],c='orange', edgecolors = 'k',linewidths=.4,
+        ax.scatter(x[-1],y[-1],c='orange', 
                    marker = "*", s = 100, zorder=line_zorder+1)
 
     #plot arrows
@@ -330,6 +324,14 @@ def plot_trajectory(key_x, key_y, trajectories, xlab=None,
         - `standard_labs`: A dictionary mapping state variable keys to their corresponding axis labels.
         - `format_ax`: A custom function to format the axis.
         - `plot_with_arrow`: A custom function to plot trajectories with arrows starting at specified indices.
+
+    Example Usage:
+        trajectories = [
+            {'N1': [0.1, 0.2, 0.3], 'N2': [0.4, 0.5, 0.6]},
+            {'N1': [0.2, 0.3, 0.4], 'N2': [0.5, 0.6, 0.7]}
+        ]
+        fig, ax = plot_trajectory('N1', 'N2', trajectories, xlab='Big Prey', ylab='Small Prey', if_legend=True)
+        fig.savefig("trajectory_plot.png")
     '''
     fig, ax = plt.subplots(1,1)
 
@@ -392,6 +394,14 @@ def plot_trajectory_vs_T(key_y, trajectories,
         - 'colors_x': a list of colors ['k', 'b', 'r', 'm']
         - `standard_labs`: A dictionary mapping state variable keys to their corresponding axis labels.
         - `format_ax`: A custom function to format the axis.
+
+    Example Usage:
+        trajectories = [
+            {'N1': [0.1, 0.2, 0.3], 'N2': [0.4, 0.5, 0.6]},
+            {'N1': [0.2, 0.3, 0.4], 'N2': [0.5, 0.6, 0.7]}
+        ]
+        fig, ax = plot_trajectory('N1', 'N2', trajectories, xlab='Big Prey', ylab='Small Prey', if_legend=True)
+        fig.savefig("trajectory_plot.png")
     '''
     fig, ax = plt.subplots(1,1)
     # set the label for the vertical axis
@@ -481,3 +491,8 @@ def make_traj_plots(params, t_f =1000,
     format_ax(ax_g3, 'g(1)', 'g(%d)'%grp_size2, if_legend = if_legend)
 
     return fig1, figN, fig_g2, fig_g3, fig_var
+    
+    
+
+
+

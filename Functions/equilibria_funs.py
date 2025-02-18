@@ -55,17 +55,17 @@ def iterate_to_eq(initialstate, t_f, params, if_dict=False):
         T = out2['T']
         N1 = out2['N1']
         N2 = out2['N2']
-        P = out2['p']
+        p = out2['p']
         g_of_x_vec = out2['g']
         mean_x = out2['mean_x']
         var = out2['var']
     else:
-        T, N1, N2, P, g_of_x_vec, mean_x, var = out2
+        T, N1, N2, p, g_of_x_vec, mean_x, var = out2
     
     # Extract results
-    traj = [N1, N2, *g_of_x_vec]
+    traj = [N1, N2, *g_of_x_vec, p]
     curr = [item[-1] for item in traj]
-    [N1, N2, *g_eq] = curr
+    [N1, N2, *g_eq, p] = curr
 
     # Check if at equilibrium
     success, timederivatives = check_at_equilibrium2(N1, N2, g_eq, params)
@@ -75,9 +75,10 @@ def iterate_to_eq(initialstate, t_f, params, if_dict=False):
         success = False
     
     if if_dict:
-        eq_dict = dict(equilibrium=np.array(curr), mean_x=mean_x[-1], var=var[-1])
+        eq_dict = dict(equilibrium=np.array([N1,N2,*g_eq]), mean_x=mean_x[-1], var=var[-1], p = p)
         return eq_dict, success, timederivatives
     else:
+        curr = curr[:-1] # take out p because haven't tested with other functions that use this
         curr.append(mean_x[-1])
         curr.append(var[-1])
         return curr, success, timederivatives
@@ -126,7 +127,8 @@ def get_equilibria_from_init_pts(initial_points, tol_unique=1e-8, if_dict = Fals
         
         if sol['success']: # the root finder found an equilibrium and it's "valid" (N1, N2, g(x) are in their ranges)
             if if_dict:
-                new_eq = dict(equilibrium = np.array([sol['N1'], sol['N2'], *sol['g']]), mean_x = sol['mean_x'], var = sol['var'])
+                new_eq = dict(equilibrium = np.array([sol['N1'], sol['N2'], *sol['g']]), 
+                              mean_x = sol['mean_x'], var = sol['var'], p = sol['p'])
             else:
                 new_eq = np.array([sol['N1'], sol['N2'], *sol['g'], sol['mean_x'], sol['var']])
             results.append(new_eq)
@@ -199,7 +201,7 @@ def nullclines_small_prey_extinct(initialstate, params):
 
     return [N1_null, *dgdT_vec]
 
-def N_nullclines(N1, N2, g_of_x_vec, xvec, η1, η2, A, H1, H2, **params):
+def N_nullclines(N1, N2, g_of_x_vec, xvec, η1, η2, A1, A2, **params):
     '''
     dN1dT, dN2dT, the change in prey pop size versus time, non-dim'ed, divided by N_i
     @inputs:
@@ -208,16 +210,17 @@ def N_nullclines(N1, N2, g_of_x_vec, xvec, η1, η2, A, H1, H2, **params):
     params - dic of params: must at least include H1, H2, α1_of_1, α2_of_1, s1, s2,
     '''
 
+    
     α1 = fun_alpha1(xvec,**params) 
     α2 = fun_alpha2(xvec,**params) 
 
     # prey nonzero nullclines
-    denominator = 1 + H1*α1*N1/xvec + H2*α2*N2/xvec
-    Y1_no_N = α1/denominator
-    Y2_no_N = α2/denominator
+    denominator = 1 + fun_H1(xvec,**params)*α1*N1 + fun_H2(xvec,**params)*α2*N2
+    f1_no_N = A1*α1/denominator
+    f2_no_N = A2*α2/denominator
 
-    N1_null = η1 * (1-N1) - A * np.sum(g_of_x_vec * Y1_no_N)
-    N2_null = η2 * (1-N2) - A * np.sum(g_of_x_vec * Y2_no_N)
+    N1_null = η1 * (1-N1) - np.sum(g_of_x_vec * f1_no_N)
+    N2_null = η2 * (1-N2) - np.sum(g_of_x_vec * f2_no_N)
     
     return N1_null, N2_null
     
@@ -310,7 +313,7 @@ def get_results_eq(out, x_max, which_prey_extinct = -1, if_dict = False):
     else:
         success = True
     if if_dict:
-        return dict(P=P_eq, N1 = N1_eq, N2 = N2_eq, g = g_eq, mean_x = mean_x_eq, var = var, success = success)
+        return dict(p=P_eq, N1 = N1_eq, N2 = N2_eq, g = g_eq, mean_x = mean_x_eq, var = var, success = success)
     else:
         return P_eq, N1_eq, N2_eq, g_eq, mean_x_eq, var, success
 
@@ -347,7 +350,10 @@ def iterate_and_solve_equilibrium(params, t_f = 1000, tol = 1e-8, if_dict = Fals
 
 
     if if_dict:
-        return dict(equilibrium = np.array([sol['N1'], sol['N2'], *sol['g']] ), mean_x = sol['mean_x'], var = sol['var'], success = sol['success'])
+        return dict(equilibrium = np.array([sol['N1'], 
+                                            sol['N2'], *sol['g']] ), 
+                    mean_x = sol['mean_x'], var = sol['var'], 
+                    success = sol['success'], p = sol['p'])
     else:
         return sol # tuple of P, N1, N2, g, mean_x, var, success
     
@@ -368,7 +374,9 @@ def get_equilibria_from_init_pts_i_extinct(initial_points, i, **params):
         
         if sol['success']: # the root finder found an equilibrium and it's "valid" (N1, N2, g(x) are in their ranges)
             new_result = dict(equilibrium = np.array([sol['N1'], sol['N2'], *sol['g']]),
-                              mean_x = sol['mean_x'], var = sol['var'])
+                              p = sol['p'],
+                              mean_x = sol['mean_x'], 
+                              var = sol['var'])
 
             # append new_eq if it's unique from the last one
             #results = check_unique(results, new_eq, tol_unique)
