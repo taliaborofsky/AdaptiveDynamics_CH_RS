@@ -1,7 +1,6 @@
 import numpy as np
 from multiprocessing import Pool, cpu_count
-from group_w_pop_funs import bounded_ivp  # Ensure this function works with multiprocessing
-from sim_graph_funs import get_initial_points
+from group_w_pop_funs import bounded_ivp, get_initial_points  # Ensure this function works with multiprocessing
 
 def classify_if_extinction(sol, extinction_threshold):
     '''
@@ -45,7 +44,7 @@ def simulate_single_point(args):
     Simulate the system for a single set of initial conditions and check for extinction.
     
     Args:
-        args (tuple): Contains (y0, t_span, params, extinction_threshold).
+        args (tuple): Contains (y0, t_f, params, extinction_threshold).
     
     Returns:
         bool: True if predators go extinct, False otherwise.
@@ -59,7 +58,7 @@ def simulate_single_point(args):
 
 
 def extinction_analysis_multiprocessing(
-    num_points, iterations, params, p_upper = 3, 
+    num_points, t_f, params, p_upper = 3, 
     extinction_threshold=1e-6, n_jobs=None
 ):
     """
@@ -84,7 +83,7 @@ def extinction_analysis_multiprocessing(
     # Prepare the initial conditions and arguments for each simulation
     simulation_args = [
         (np.concatenate(([N1[i], N2[i]], g_vectors[i])), 
-         iterations, params, extinction_threshold)
+         t_f, params, extinction_threshold)
         for i in range(num_points)
     ]
     

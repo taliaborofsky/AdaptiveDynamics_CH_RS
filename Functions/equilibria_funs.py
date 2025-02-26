@@ -368,7 +368,7 @@ def get_equilibria_from_init_pts_i_extinct(initial_points, i, **params):
     curr_eq = np.zeros(2+x_max) #N1 = 0, N2 = 0, g(x) = 0
     results = []
     for point in initial_points:
-        out = get_equilibrium_prey_i_extinct(params, i, Nj_0 = point[1], 
+        out = get_equilibrium_prey_i_extinct(params, i, Nj_0 = point[2-i], 
                                              g_of_x_vec = point[2:])
         sol = get_results_eq(out, x_max, which_prey_extinct = i, if_dict = True)
         
