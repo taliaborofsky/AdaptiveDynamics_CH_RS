@@ -20,12 +20,16 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
     df_dT for x = 1, 2, ..., xmax
     '''
     x_max = params['x_max']; Tx = params['Tx']; 
+    xvec = np.arange(1,x_max+1,1)
     d = params['d']; 
     g_of_x_vec = np.append(g_of_x_vec,0) # so can find dgdT at x = x_max
 
     # fix negative values (solve_ivp can overshoot if step sizes too big)
     g_of_x_vec[g_of_x_vec<0] = 0
-    
+
+    # this is required for S(x,y)
+    fitnessvec = per_capita_fitness_from_prey_non_dim(xvec, N1, N2, **params) # fitness_from_prey_non_dim(xvec, N1, N2, **params)
+
     def g(x):
         return g_of_x_vec[x-1]
     def S(x,y):
@@ -49,7 +53,6 @@ def group_formation_model_non_dim(T, g_of_x_vec,N1,N2, params):
     
     xvec = np.arange(1,x_max+1,1)
     # it \tau_x > 0make population matrix = birth matrix + death matrix
-    fitnessvec = per_capita_fitness_from_prey_non_dim(xvec, N1, N2, **params) # fitness_from_prey_non_dim(xvec, N1, N2, **params)
     dgdT_vec = np.zeros(x_max)
 
     # births and deaths
@@ -509,30 +512,43 @@ def get_random_g_bounded_p(p_upper, num_initial, x_max):
     Returns:
         np.ndarray: An array of shape (num_initial, x_max) containing valid g vectors.
     """
-    g_list = []
-    while len(g_list) < num_initial:
-        g_mat = np.zeros((num_initial, x_max))
-        preds_left = p_upper * np.ones(num_initial)  # Track remaining predator allocation for each vector
-        
-        for x in range(1, x_max + 1):
-            gi = np.random.uniform(0.01, preds_left / x, num_initial)
-            g_mat[:, x - 1] = gi
-            
-            # Update current predator population
-            preds_left -= x * gi
-            preds_left[preds_left < 0] = 0  # Ensure no negative remaining capacity
+    np.random.seed(1)
+    xvec = np.arange(1, x_max + 1)  # Vector [1, 2, ..., x_max]
+    p_vec = np.random.uniform(0, p_upper, size=num_initial)
     
-        # Calculate total population p for each g vector
-        p_vals = np.sum(g_mat * np.arange(1, x_max + 1), axis=1)
+    # split predators into bins. Generate random proportions that sum to 1 for each row. 
+    # use dirichlet distribution
+    portion_in_bin_mat = np.random.dirichlet(alpha=np.ones(x_max), size=num_initial)
+    # Compute number of predators in each bin
+    num_preds_in_bin_mat = portion_in_bin_mat * p_vec[:, np.newaxis]  # Broadcast multiplication
+    # Compute g(x)
+    g_x_mat = num_preds_in_bin_mat / xvec  # Element-wise division by corresponding x values
+    return g_x_mat
+    
+    # g_list = []
+    # while len(g_list) < num_initial:
+    #     g_mat = np.zeros((num_initial, x_max))
+    #     preds_left = p_upper * np.ones(num_initial)  # Track remaining predator allocation for each vector
         
-        # Filter valid g vectors where total population <= p_upper
-        valid_indices = np.where(p_vals <= p_upper)[0]
-        valid_g = g_mat[valid_indices]
+    #     for x in range(1, x_max + 1):
+    #         gi = np.random.uniform(0.01, preds_left / x, num_initial)
+    #         g_mat[:, x - 1] = gi
+            
+    #         # Update current predator population
+    #         preds_left -= x * gi
+    #         preds_left[preds_left < 0] = 0  # Ensure no negative remaining capacity
+    
+    #     # Calculate total population p for each g vector
+    #     p_vals = np.sum(g_mat * np.arange(1, x_max + 1), axis=1)
         
-        # Add valid g vectors to the list
-        g_list.extend(valid_g.tolist())
+    #     # Filter valid g vectors where total population <= p_upper
+    #     valid_indices = np.where(p_vals <= p_upper)[0]
+    #     valid_g = g_mat[valid_indices]
+        
+    #     # Add valid g vectors to the list
+    #     g_list.extend(valid_g.tolist())
 
-    # Limit the result to exactly num_initial vectors
-    g_good = np.array(g_list[:num_initial])
+    # # Limit the result to exactly num_initial vectors
+    # g_good = np.array(g_list[:num_initial])
 
-    return g_good
+    # return g_good

@@ -75,7 +75,7 @@ def extinction_analysis_multiprocessing(
         float: Proportion of initial points leading to extinction.
     """
     # Step 1: Generate initial points
-    init_pts = get_initial_points(num_points, p_upper = 3, **params)
+    init_pts = get_initial_points(num_points, p_upper = p_upper, **params)
     N1 = init_pts[:,0]
     N2 = init_pts[:,1]
     g_vectors = init_pts[:,2:]
@@ -111,6 +111,6 @@ def extinction_analysis_multiprocessing(
 
     # Normalize counts to proportions
     total = sum(extinction_counts.values())
-    extinction_proportions = {etype: count / total for etype, count in extinction_counts.items()}
+    extinction_counts_labeled = {etype: count for etype, count in extinction_counts.items()}#{etype: count / total for etype, count in extinction_counts.items()}
 
-    return extinction_proportions
+    return extinction_counts_labeled
