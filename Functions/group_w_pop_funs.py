@@ -453,6 +453,7 @@ def update_params(param_key, param, params_base):
     params = params_base.copy()
         
     if param_key == "scale": # this means β1/β2 = H1/H2 and β2, H2 are set
+        params['scale'] = param
         params['β1'] = params['β2']*param
         A_frac = params_base['A1']/params_base['A2']
         params['H1a'] = params['H2a'] * param * A_frac

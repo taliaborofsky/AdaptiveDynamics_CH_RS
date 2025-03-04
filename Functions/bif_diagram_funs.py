@@ -413,3 +413,23 @@ def check_unique(results, new_eq_dic, tol_unique = 1e-8):
     else:
         results.append(new_eq_dic)
     return results
+
+def run_bifurcation_A1_scale(scale):
+    '''
+    a version of get_bif_input with only 1 input so it works with pool.map
+    '''
+    H = 1
+    x_max = 5
+    params_base = dict(η1 = 0.2, η2 = 0.6, A1 = 0.6, A2 = 0.5, 
+                       β1 = 8, β2 = 1, H1a = 0, H1b=H, H2a = 0, H2b = H, 
+                      α1_of_1=0.05, α2_of_1=0.95, 
+                      s1=2, s2=2, α2_fun_type = 'constant',
+                      x_max = x_max, d = 10,
+                     Tx = .01, pop_process = True, scale = 6)
+    param_key = "A1"  # The parameter varied within `get_bif_input`
+    A1_values = np.linspace(0.5, 1.5, 30)  # Example range for A1
+    """Runs get_bif_input for a fixed scale value across all A1 values."""
+    params = update_params("scale", scale, params_base)
+    df = get_bif_input(param_key, A1_values, params)
+    df["scale"] = scale  # Add scale as a column
+    return df

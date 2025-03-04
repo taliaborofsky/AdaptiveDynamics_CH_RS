@@ -101,6 +101,10 @@ def fun_grad_small_prey(N1,N2,gvec, grad_f_2, η2,  x_max, **params):
     
 def fun_Jac_groups_helper(N1, N2, gvec, grad_f_1, grad_f_2, xvec, x_max, Tx, d,
                    η1, η2, **params):
+    '''
+    Calculates pdv{Q_i}{N_1}, pdv{Q_i}{N_2}, pdv{Q_i}{g(1)}... pdv{Q_i}{g(x_max)} and stacks them into a matrix
+    where Q_i is the right side of the equaiton for dg(i)/dT
+    '''
     
     Jac = np.zeros((len(gvec),len(gvec)+2))
 
@@ -341,3 +345,65 @@ def fun_Jac_groups_nopop(N1, N2, gvec, x_max, Tx, d, **params):
                                            
     
     return Jac
+
+def get_apparent_competition(N1,N2,gvec,**params):
+    '''
+    This obtains partial N2 / partial N1
+    To find apparent competition, we solve the equation:
+        -(partial U_2, Q_1, Q_2, ... Q_{x_m} all with respect to N_1)
+        = J_{apparent} * (partial of N_2, g(1), g(2), ..., g(xm) all with respect to N_1),
+    where J_apparent is the full jacobian of the system without the partial derivatives wrt N_1.
+    i.e., without the first row and column (note U_2 is the right side of dN_2/dT, Q_i is the right side of dg(i)/dT).
+
+    there is apparent competition if the partial of N_2 wrt N_1 is negative
+
+
+    @inputs:
+    N1,N2,gvec at equilibrium
+    params: dictionary of parameters
+
+    @returns:
+    the partial of N_2 vs N_1 (float)
+    '''
+    # get the full jacobian
+    Jac_full = fun_Jac(N1,N2,gvec,**params)
+    # trim 1st column andn row
+    Jac_apparent = Jac_full[1:,1:]
+    # get partials of 
+    left_side_eqn = -Jac_full[1:,0]
+    pdv_N1 = np.zeros(left_side_eqn.shape)
+    np.matmul(np.linalg.inv(Jac_apparent),left_side_eqn,out=pdv_N1)
+    apparent_comp = pdv_N1[0]
+
+    return apparent_comp
+
+def get_apparent_competition2(N1,N2,gvec,**params):
+    '''
+    this returns partial N1 / partial N2
+    To find apparent competition, we solve the equation:
+        -(partial U_2, Q_1, Q_2, ... Q_{x_m} all with respect to N_1)
+        = J_{apparent2} * (partial of N_2, g(1), g(2), ..., g(xm) all with respect to N_2),
+    where J_apparent is the full jacobian of the system without the partial derivatives wrt N_2.
+    i.e., without the 2nd row and 2nd column (note U_2 is the right side of dN_2/dT, Q_i is the right side of dg(i)/dT).
+
+    there is apparent competition if the partial of N_1 wrt N_2 is negative
+
+
+    @inputs:
+    N1,N2,gvec at equilibrium
+    params: dictionary of parameters
+
+    @returns:
+    the partial of N_1 vs N_2 (float)
+    '''
+    # get the full jacobian
+    Jac_full = fun_Jac(N1,N2,gvec,**params)
+    # trim 2nd column and row
+    Jac_apparent = np.delete(np.delete(Jac_full, 1, axis=0), 1, axis=1)
+    # get partials wrt N2
+    left_side_eqn = -np.delete(Jac_full[:, 1], 1)
+    pdv_N2 = np.zeros(left_side_eqn.shape)
+    np.matmul(np.linalg.inv(Jac_apparent),left_side_eqn,out=pdv_N2)
+    apparent_comp2 = pdv_N2[0]
+
+    return apparent_comp2
