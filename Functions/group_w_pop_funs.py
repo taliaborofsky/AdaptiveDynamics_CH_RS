@@ -463,6 +463,8 @@ def update_params(param_key, param, params_base):
         params[param_key] = param
 
         if "scale" in params:
+            if param_key == 'η1':
+                params['η2'] = params['η1']*params["scale"]
             params = update_params("scale", params["scale"], params) # make sure everything still scaled correctly
                 
     return params
