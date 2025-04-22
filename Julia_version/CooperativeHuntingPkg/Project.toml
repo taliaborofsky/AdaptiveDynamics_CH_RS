@@ -1,0 +1,11 @@
+name = "CooperativeHuntingPkg"
+uuid = "bb0a82a8-bea2-4e8b-a7d4-ef513daa3692"
+authors = ["taliaborofsky <tborofsky@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
+
+[compat]
+UnPack = "1.0.2"
+julia = "1.11.3"
