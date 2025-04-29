@@ -206,13 +206,21 @@ def fun_partial_S_wrt_prey(N1, N2, x, π_vec, fitnessvec, partial_π,
     S_1_x = best_response_fun_given_fitness(1,x,fitnessvec,d)
     S_x_1 = 1 - S_1_x
 
-    partial_π_of_1 = partial_π[:,0] # [ \partial π(1) / \partial N_1, \partial π(1) / \partial N_2]
-    partial_π_of_x = partial_π[:,x-1] # [ \partial π(x) / \partial N_1, \partial π(x) / \partial N_2]
-    π_of_1 = π_vec[0] # π(1)
-    π_of_x = π_vec[x-1] # π(x)
+    partial_W_of_1 = partial_π[:,0]
+    partial_W_of_x = partial_π[:,x-1]/x
 
-    partial_S_1_x = d*S_1_x * S_x_1 * ( partial_π_of_1 * 1 / π_vec[0] \
-                                   - partial_π_of_x * 1 / π_of_x)
+    W_of_1 = π_vec[0]
+    W_of_x = π_vec[x-1]/(x-1)
+    
+    partial_S_1_x = d*S_1_x * S_x_1 *(partial_W_of_x - partial_W_of_1)
+    # partial_π_of_1 = partial_π[:,0] # [ \partial π(1) / \partial N_1, \partial π(1) / \partial N_2]
+    # partial_π_of_x = partial_π[:,x-1] # [ \partial π(x) / \partial N_1, \partial π(x) / \partial N_2]
+    
+    # #π_of_1 = π_vec[0] # π(1)
+    # #π_of_x = π_vec[x-1] # π(x)
+
+    # partial_S_1_x = d*S_1_x * S_x_1 * ( partial_π_of_1 * 1 / π_vec[0] \
+    #                                - partial_π_of_x * 1 / π_of_x)
     
     return partial_S_1_x
     

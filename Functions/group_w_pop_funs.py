@@ -122,14 +122,17 @@ def best_response_fun_given_fitness(x,y,fitnessvec, d):
     '''
     W_of_x = fitnessvec[x-1]
     W_of_y = fitnessvec[y-1]
-    W_min = min(W_of_x, W_of_y)
-    W_max = max(W_of_x, W_of_y)
-    if W_max > 0:
-        numerator = (W_of_x/W_max)**d
-    else:
-        return 0.5
-    denominator = 1 + (W_min/W_max)**d # this adjustment helps avoid dividing by zero from numpy rounding
-    return numerator/denominator
+    z = -d*(W_of_x - W_of_y)
+    z = np.clip(z, -500, 500)  # Avoids overflow
+    return 1/(1 + np.exp(z))
+    # W_min = min(W_of_x, W_of_y)
+    # W_max = max(W_of_x, W_of_y)
+    # if W_max > 0:
+    #     numerator = (W_of_x/W_max)**d
+    # else:
+    #     return 0.5
+    # denominator = 1 + (W_min/W_max)**d # this adjustment helps avoid dividing by zero from numpy rounding
+    # return numerator/denominator
     
     # if W_of_x**d + W_of_y**d < 1e-100: # note that then at this point it will be 
     #                                     #rounded to 0, 
@@ -162,16 +165,19 @@ def best_response_fun(x,y, N1,N2, d, **params):
     
     W_of_x = fitness_from_prey_non_dim(x, N1, N2, **params)
     W_of_y = fitness_from_prey_non_dim(y, N1, N2, **params)
+    z = -d * (W_of_x - W_of_y)
+    z = np.clip(z, -500, 500)  # Avoids overflow
+    return 1/(1+ np.exp(z))
 
-    W_min = min(W_of_x, W_of_y)
-    W_max = max(W_of_x, W_of_y)
-    if W_max > 0:
-        numerator = (W_of_x/W_max)**d
-    else:
-        return 0.5
-    denominator = 1 + (W_min/W_max)**d
+    # W_min = min(W_of_x, W_of_y)
+    # W_max = max(W_of_x, W_of_y)
+    # if W_max > 0:
+    #     numerator = (W_of_x/W_max)**d
+    # else:
+    #     return 0.5
+    # denominator = 1 + (W_min/W_max)**d
 
-    return W_of_x**d/(W_of_x**d + W_of_y**d)
+    # return W_of_x**d/(W_of_x**d + W_of_y**d)
 
     
 
@@ -369,9 +375,12 @@ def transformed_model(T, u0, arg, params):
     # then du/dt = dy/dt/(b*y). 
     # Then g cannot become negative
     a = 1; b = 1
-    y0 = a * np.exp(b*u0) # transform back into original coordinates
+    y0 = a * np.exp(np.clip(b*u0,-500,np.inf)) # transform back into original coordinates. 
+                                            # clipping to avoid runtime issues from overflow
+    #y0 = np.clip(a * np.exp(b * u0), 1e-10, np.inf) # clips y0 if near zero to avoid runtime warning
     y_ = full_model(T,y0, arg, params) # find derivative
     y_ = np.array(y_)
+    y0 = np.clip(y0, 1e-10, np.inf) # clips y0 if near zero to avoid runtime warning
     u_ = y_/(b*y0) # find derivative of transformed coordinates
     return u_
 
