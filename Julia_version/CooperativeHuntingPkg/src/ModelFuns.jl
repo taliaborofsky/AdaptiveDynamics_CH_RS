@@ -8,12 +8,12 @@ using .ModelHelperFuns
 export fullsystem_scaled!, fullsystem!, fun_dg!, fun_dN1dT!, fun_dN2dT!
 # insert fullsystem scaled
 
-function fullsystem_scaled!(du,u,p,T)
+function fullsystem_scaled!(du,u,p,T=0)
     newp = scale_parameters(p) # update parameters
     fullsystem!(du,u,newp,T)
 end
 
-function fullsystem!(du, u, p, T)
+function fullsystem!(du, u, p, T=0)
     #=
     dN1/dT, dN2/dT, dg1/dT, dg2/dT, ... , dg(xmax)/dT
     u = N1,N2,g(1), g(2), ..., g(xmax)
@@ -37,8 +37,7 @@ function fun_dg!(du, u, p, T)
     # i'll need fitnesses and best response functions
     Wvec = fun_W(xvec, N1, N2, p) 
     W1 = Wvec[1]
-    S_1_x = fun_S_given_W(W1,Wvec[2:end], p)
-    S_1_x = vcat(1/2, S_1_x) # this makes it easier to index
+    S_1_x = fun_S_given_W(Wvec[1],Wvec, p)
     dg = du[3:end]
     for x in xvec
         if x==1
