@@ -5,8 +5,40 @@ include("ModelHelperFuns.jl")
 include("ModelFuns.jl")
 using .ModelHelperFuns
 using .ModelFuns
+using LaTeXStrings
 
-export get_p, get_meanx
+
+export get_p, get_meanx, get_prob_in_x
+export ylabel_dic, param_label_dic
+
+ylabel_dic = Dict(
+    :N1 => L"N_1"*", Scaled Big Prey\nDensity",
+    :N2 => L"N_2"*", Scaled Small Prey\nDensity",
+    :mean_x => "Mean Experienced\nGroup Size, "*L"\bar{x}",
+    :p => L"Predator density, $p$",
+    :Nsum => "Sum of Prey Densities,\n"*L"N_1 + N_2",
+    :g1 => L"g(1)",
+    :g2 => L"g(2)",
+    :g3 => L"g(3)"
+)
+
+param_label_dic = Dict(
+    :α1_of_1 => L"\alpha_1(1)",
+    :α2_of_1 => L"\alpha_2(1)",
+    :s1 => L"s_1",
+    :s2 => L"s_2",
+    :H1a => L"H_{1a}",
+    :H2a => L"H_{2a}",
+    :H2b => L"H_{2b}",
+    :A1 => L"Relative Attack Rate of Big Prey, $A_1$",
+    :A2 => L"A_2",
+    :η2 => L"Growth of Small Prey, $\eta_2$",
+    :β2 => L"\beta_2",
+    :x_max => L"x_{max}",
+    :Tg => "Relative Group Dynamics \nTimescale, "*L"T_g",
+    :d => L"d",
+    :scale => L"Scale, $\beta_1/\beta_2$"
+)
 
 
 
@@ -62,5 +94,17 @@ function get_meanx(g, x_max)
     return mean_x
 end
 
+function get_prob_in_x(g::AbstractMatrix, p::AbstractVector, x_max)
+    # find prob in group of size x, for g a matrix and p a vector
+        x=1:x_max
+        num_in_gx = g .* x'
+        prob_in_x = num_in_gx ./ p
+    end
+    
+function get_prob_in_x(g::AbstractVector, p::Number, x_max)
+    x = 1:x_max
+    num_in_gx = g .* x
+    prob_in_x = num_in_gx ./p
+end
 
 end

@@ -1,7 +1,7 @@
 module ModelHelperFuns
 using UnPack
 
-export scale_parameters
+export scale_parameters, scale_parameters2
 export  fun_H1, fun_H2, fun_alpha1, fun_alpha2, fun_f1, fun_f2, fun_W, fun_S_given_W
 #=
 all functions designed to broadcast over elements of x
@@ -25,6 +25,27 @@ function scale_parameters(parameters::Dict)
     parameters[:H1b] = scale * (A1/A2) * (H2a + H2b) - H1a
     return parameters
 end
+
+# using multiple dispatch for scale_parameters
+"""
+scale_parameters2
+given H1b and H2(1), find H1a
+"""
+function scale_parameters2(parameters::NamedTuple)
+    @unpack scale, β2, η2, A1, A2, H2a, H2b, H1b = parameters
+    return merge(parameters,(β1 = scale*β2, 
+                                η1 = η2/scale,
+                                H1a = scale * (A1/A2) * (H2a + H2b) 
+                                            - H1b))
+end
+function scale_parameters2(parameters::Dict)
+    @unpack scale, β2, η2, A1, A2, H2a, H2b, H1b = parameters
+    parameters[:β1] = scale*β2
+    parameters[:η1] = η2/scale
+    parameters[:H1a] = scale * (A1/A2) * (H2a + H2b) - H1b
+    return parameters
+end
+
 function fun_H1(x, parameters)
 
     @unpack H1a, H1b = parameters 
@@ -45,6 +66,7 @@ function fun_alpha1(x, parameters)
 end
 
 function fun_alpha2(x, parameters)
+    #= retired =#
     @unpack α2_fun_type, α2_of_1, s2 = parameters
 
     if α2_fun_type == "constant"
@@ -63,12 +85,12 @@ function fun_response_non_dim(x, N1, N2, index, parameters)
     functional response to prey type index
     can handle x, N1, or N2 as vectors
     =#
-    @unpack A1, A2 = parameters
+    @unpack A1, A2, α2_of_1 = parameters
 
     H1 = fun_H1(x, parameters)
     H2 = fun_H2(x, parameters)
     α1 = fun_alpha1(x, parameters)
-    α2 = fun_alpha2(x, parameters)
+    α2 = α2_of_1 #fun_alpha2(x, parameters)
 
     numerator = index == 1 ? A1 .* α1 .* N1 :
                 index == 2 ? A2 .* α2 .* N2 :

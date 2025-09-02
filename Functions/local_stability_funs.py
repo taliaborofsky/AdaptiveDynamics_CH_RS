@@ -7,7 +7,7 @@ def fun_Jac(N1,N2,gvec,**params):
     x_max = params['x_max']
     xvec = np.arange(1,x_max+1,1)
     size = len(gvec)+2
-
+    
 
     # stuff used for multiple rows that speeds it up
     # the gradient of f(x) vs N1, N2 for x = 1, 2, ..., x_max. 
@@ -36,7 +36,7 @@ def fun_Jac_groups(N1, N2, gvec, params):
 
 
     # the jacobian has two columns that need to be eliminated because they corrrespond to the gradient of dg/dt wrt N1, N2
-    Jac_need_to_trim = fun_Jac_groups_helper(N1, N2, gvec, grad_f1, grad_f_2, xvec, **params)
+    Jac_need_to_trim = fun_Jac_groups_helper(N1, N2, gvec, grad_f_1, grad_f_2, xvec, **params)
 
     Jac = Jac[:, 2:]
     return Jac
@@ -123,7 +123,13 @@ def fun_Jac_groups_helper(N1, N2, gvec, grad_f_1, grad_f_2, xvec, x_max, Tx, d,
                                  for x in range(2,x_max+1)]
 
     S_x_1_vec = [best_response_fun_given_fitness(x,1,fitnessvec,d) for x in range(2,x_max+1)]
-    td = 1 - η1 - η2
+
+    # if no pop_process
+    td = 1 - η1 - η2 
+    if params["pop_process"] == False:
+        td = 0
+        fitnessvec = fitnessvec * 0
+        π_vec = π_vec * 0
     def g(x):
         return gvec[x-1]
     def partial_S(x):

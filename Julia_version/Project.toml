@@ -1,0 +1,12 @@
+[deps]
+BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
+CooperativeHuntingPkg = "bb0a82a8-bea2-4e8b-a7d4-ef513daa3692"
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Measures = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
+Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
