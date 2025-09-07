@@ -11,6 +11,7 @@ using DifferentialEquations
 using BifurcationKit
 using LaTeXStrings
 using Measures
+using UnPack
 
 # plotting defaults
 default(
@@ -30,7 +31,8 @@ export do_base_continuations, do_base_continuations_nog
 export recordFromSolution_nog, diagram_2_recursion, diagram_2_recursion_nog 
 export make_and_save_nice_plots, make_and_save_nice_plots_nog
 export plot_comparison_branches, plot_comparison_branches_filtered
-
+export continue_sp
+export equilibrium_nogroups
 ylabel_dic = Dict(
     :N1 => L"N_1"*", Scaled Big Prey\nDensity",
     :N2 => L"N_2"*", Scaled Small Prey\nDensity",
@@ -61,6 +63,7 @@ param_label_dic = Dict(
     :x => "Group Size"
 )
 # Group and Pop Dynamics
+    
     function extract_branch_matrix(branch, x_max)
         # Start with N1 and N2
         fields = [:N1, :N2]
@@ -287,6 +290,34 @@ param_label_dic = Dict(
     end
 
 # No Group Dynamics
+    function equilibrium_nogroups(params)
+        @unpack η1, η2, β1, β2 = params
+        @unpack x, A1, A2, α2_of_1, H1a, H1b, H2a, H2b = params
+
+        α1 = fun_alpha1(x,params)
+        H1 = H1a + H1b/x
+        H2 = H2a + H2b/x 
+        td = 1 - η1 - η2
+
+
+        # now use what i had before to solve
+        denom_c = α1 * (β1 * A1 - H1 * td * x)
+        c1_of_x = α2_of_1 * ( H2 * td * x - β2 * A2) / denom_c
+        c0_of_x = td * x / denom_c
+        γ1 = A1 * α1 / η1
+        γ2 = A2 * α2_of_1 / η2
+
+        N2 = ( γ2 * (1 - c0_of_x) - γ1 ) / ( γ2*c1_of_x - γ1)
+        N1 = c1_of_x * N2 + c0_of_x
+        P = η1 * (1 - N1) * x * (1 + α1 * H1 * N1 + α2_of_1 * H2 * N2)/(A1 * α1)
+
+
+        # remember M1 = N1 * k1, M2 = N2 * k2
+
+        return [N1, N2, P]
+
+    end
+
     function recordFromSolution_nog(u,p_nt; k...)
         N1, N2, P = u[1], u[2], u[3]
         return (N1 = N1, N2 = N2, P = P)
@@ -401,9 +432,24 @@ param_label_dic = Dict(
 
     end
 
-    
+    function continue_sp(
+        sp, p_nt, paramkey, systemfunction, lens, p_min, p_max, dsmax
+        )
+        # i do this because bifurcationkits own continuation function from a special point is nto working since 
+        # a DifferentialEquations update caused incompatibilities with SciMLBase and I had to use an old version of SciMLBase
+        u0 = sp.x
+        param = sp.param
+        p_nt = (;p_nt..., Dict(paramkey => param)...)
+        new_br = do_continuation(
+                        u0, p_nt;
+                        systemfunction = systemfunction, lens = lens,
+                        p_min = p_min, p_max = p_max, dsmax = dsmax
+                        )
+        return new_br
+    end
 
     function diagram_2_recursion_nog(p_nt; lens = (@optic _.scale), 
+        paramkey = :scale, 
         p_min = 0.1, p_max = 8.0, 
         systemfunction =system_scaled_nogroups, 
         dsmax = 0.01)
@@ -417,12 +463,19 @@ param_label_dic = Dict(
         for (name, br) in pairs(br_list)
             for (i, sp) in enumerate(br.specialpoint)
                 if sp.type == :bp
-                    push!(
-                        extra_branches, 
-                        continuation(
-                            br, i; 
-                            bothside = true)
+                    try
+                        new_br = continue_sp(
+                            sp, p_nt, paramkey, systemfunction, 
+                            lens, p_min, p_max, 0.01
                         )
+                        push!(
+                        extra_branches, 
+                        new_br
+                        )
+                    catch e
+                        @warn "continue_sp failed for $name specialpoint $i: $e"
+                        continue  # skip to next iteration
+                    end
                 end
             end
         end
@@ -592,7 +645,8 @@ param_label_dic = Dict(
         end
 
     end
-    function diagram_2_recursion(p_nt; lens = (@optic _.scale), 
+    function diagram_2_recursion(p_nt; paramkey = :scale, 
+        lens = (@optic _.scale), 
         p_min = 0.1, p_max = 8.0, 
         systemfunction =system_scaled_nogroups, 
         dsmax = 0.01)
@@ -613,12 +667,18 @@ param_label_dic = Dict(
         for (name, br) in pairs(br_list)
             for (i, sp) in enumerate(br.specialpoint)
                 if sp.type == :bp
-                    push!(
-                        extra_branches, 
-                        continuation(
-                            br, i; 
-                            bothside = true)
+                    try
+                        new_br = continue_sp(
+                        sp, p_nt, paramkey, systemfunction, lens, p_min, p_max, 0.01
                         )
+                        push!(
+                        extra_branches, 
+                        new_br
+                        )
+                    catch e
+                        @warn "continue_sp failed for $name specialpoint $i: $e"
+                        continue  # skip to next iteration
+                    end
                 end
             end
         end

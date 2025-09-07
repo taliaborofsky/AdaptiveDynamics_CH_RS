@@ -36,6 +36,8 @@ export do_base_continuations, do_base_continuations_nog
 export recordFromSolution_nog, diagram_2_recursion, diagram_2_recursion_nog 
 export make_and_save_nice_plots, make_and_save_nice_plots_nog
 export plot_comparison_branches, plot_comparison_branches_filtered
+export continue_sp
+export equilibrium_nogroups
 # ApparentCompTools
 export Jacobian, Jacobian_g, get_∂N2_∂N1, get_∂N1_∂N2
 

@@ -103,7 +103,7 @@ end
 
 function fun_W(x, N1, N2, parameters)
     #= 
-    per capita fitness from prey
+    per capita fecundity from prey
     x can be vector
     =#
     @unpack β1, β2 = parameters
