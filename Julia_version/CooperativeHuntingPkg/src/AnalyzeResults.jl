@@ -8,7 +8,7 @@ using .ModelFuns
 using LaTeXStrings
 
 
-export get_p, get_meanx, get_prob_in_x
+export get_p, get_meanx, get_prob_in_x, get_meanx_nosingle
 export ylabel_dic, param_label_dic
 
 ylabel_dic = Dict(
@@ -46,6 +46,7 @@ function get_p(g::AbstractMatrix, x_max::Int)
     x = 1:x_max
     return sum(x .* g, dims = 1)  # Return a vector
 end
+
 function get_p(g::AbstractVector, x_max::Int)
     x = 1:x_max
     return sum(x .*g) # returns a scalar
@@ -71,6 +72,27 @@ function get_meanx(g::AbstractMatrix, x_max::Int, p::AbstractMatrix)
     return ans
 end
 
+function get_meanx_nosingle(g::AbstractVector, x_max::Int, P::Number)
+    #=
+    Expected group size an individual belongs to if it is in a group
+    =#
+    x_vec = 2:x_max
+    numerator = x_vec.^2 .* g[2:end]
+    if P < 1e-10 
+        return 1.0
+    else
+        return sum(numerator) / (P - g[1])
+    end
+end
+
+function get_meanx_nosingle(g, x_max)
+    #= 
+    get mean x excluding singletons, no P given
+    =#
+    p = get_p(g,x_max)
+    mean_x_nosingle = get_meanx_nosingle(g, x_max, P)
+    return mean_x_nosingle
+end
 function get_meanx(g::AbstractVector, x_max::Int, p::Number)
     #=
     Average group size any individual is in when `p` is a scalar.
@@ -100,11 +122,20 @@ function get_prob_in_x(g::AbstractMatrix, p::AbstractVector, x_max)
         num_in_gx = g .* x'
         prob_in_x = num_in_gx ./ p
     end
+
+function get_prob_in_x(g::AbstractMatrix, p::Number, x_max)
+    # find prob in group of size x, for g a matrix and p a vector
+        x=1:x_max
+        num_in_gx = g .* x'
+        prob_in_x = num_in_gx ./ p
+    end
     
 function get_prob_in_x(g::AbstractVector, p::Number, x_max)
     x = 1:x_max
     num_in_gx = g .* x
     prob_in_x = num_in_gx ./p
 end
+
+
 
 end

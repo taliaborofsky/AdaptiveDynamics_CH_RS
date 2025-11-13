@@ -9,8 +9,32 @@ export fullsystem_scaled!, fullsystem!, fullsystem_scaled2!, fun_dg!, fun_dN1dT!
 export fun_dg_nopop!, fun_dg_nopop
 export system_scaled_nogroups, system_scaled_nogroups!, system_nogroups!
 export system_nogroups
+export CoupledDynamics_1Prey_ODE, CoupledDynamics_1Prey_ODE!
 # insert fullsystem scaled
 
+function CoupledDynamics_1Prey_ODE(u,p,T=0)
+
+    du = copy(u).*0
+
+
+    CoupledDynamics_1Prey_ODE!(du,u,p,T)
+    
+    return du
+end
+
+function CoupledDynamics_1Prey_ODE!(du,u,p,T=0)
+
+    # call groups...  need to adjust du, u
+
+    du_N2 = [du[1], 0, du[2:end]...]
+    u_N2 = [u[1],0,u[2:end]...]
+    fullsystem_scaled!(du_N2, u_N2, p, T)
+
+    # write results back into du instead of reassigning
+    du[1] = du_N2[1]
+    du[2:end] .= du_N2[3:end]
+    return nothing
+end
 function fullsystem_scaled2!(du,u,p,T=0)
     newp = scale_parameters2(p) # update parameters
     fullsystem!(du,u,newp,T)
@@ -28,6 +52,7 @@ function fullsystem!(du, u, p, T=0)
     p is a named tuple or dictionary of parameters
     T is time (rescaled)
     =#
+    @assert length(du) == length(u)
     fun_dN1dT!(du, u, p,T)
     fun_dN2dT!(du, u, p,T)
     fun_dg!(du,u,p,T) # update dg vector
@@ -167,6 +192,8 @@ function fun_dN1dT!(du, u, p,T)
 
     # Extract parameters from p
     @unpack x_max, η1 = p
+    @assert length(u) == x_max+2 length(u)
+
 
     
     x_vec = 1:x_max
