@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Borofsky"
+  given-names: "Talia"
+  orcid: "https://orcid.org/0000-0002-9123-6961"
+- family-names: "Erol"
+  given-names: "Akçay"
+  orcid: "https://orcid.org/0000-0001-8149-7124"
+- family-names: "Daniel"
+  given-names: "Rubenstein"
+  orcid: "https://orcid.org/0000-0001-9049-5219"
+- family-names: "Gili"
+  given-names: "Greenbaum"
+  orcid: "https://orcid.org/0000-0002-1631-8203"
+- family-names: "Simon"
+  given-names: "Levin"
+  orcid: "https://orcid.org/0000-0002-8216-5639"
+title: "Coupled dynamics of predator group formation and prey populations"
+version: 1.0.0
+date-released: 2026-01-16
+url: "https://github.com/taliaborofsky/CoupledDynamicsGroupsPredPrey"
