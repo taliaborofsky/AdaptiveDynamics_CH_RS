@@ -408,8 +408,8 @@ function heatmap_bif_g(gmat, P::Number, N1::Number, N2::Number, paramkey, paramv
             x_mc_vec[i] = any(W[2:end] .< W[1]) ? findfirst( W[2:end] .< W[1]) : params[:x_max]
             x_opt_vec[i] = argmax(W)
     end
-    plot!(paramvec, x_mc_vec, label = L"x^*")
-    plot!(paramvec, x_opt_vec, label = L"x_0")
+    plot!(paramvec, x_mc_vec, label = L"\hat{x}")
+    plot!(paramvec, x_opt_vec, label = L"x^*")
     return hm
 end
 
